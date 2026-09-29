@@ -21,10 +21,10 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Install Android platform + build-tools
-        run: |
-          yes | sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
-          yes | sdkmanager --licenses > /dev/null || true
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools "platforms;android-34" "build-tools;34.0.0"
 
       - name: Install Gradle 8.7
         run: |
