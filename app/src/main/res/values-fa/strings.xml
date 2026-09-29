@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">آیرون‌اپ</string>
+    <string name="add_sub">افزودن اشتراک</string>
+    <string name="sub_hint">لینک ساب یا توکن را بچسبانید…</string>
+    <string name="connect">اتصال</string>
+    <string name="disconnect">قطع اتصال</string>
+    <string name="connecting">در حال اتصال…</string>
+    <string name="home">خانه</string>
+    <string name="configs">کانفیگ‌ها</string>
+    <string name="settings">تنظیمات</string>
+    <string name="remaining_volume">حجم باقی‌مانده</string>
+    <string name="remaining_time">زمان باقی‌مانده</string>
+    <string name="unlimited">نامحدود</string>
+    <string name="expired_blocked">حجم یا تاریخ اعتبار این اکانت تمام شده و امکان اتصال نیست.</string>
+    <string name="scan_qr">اسکن QR</string>
+    <string name="paste">افزودن</string>
+    <string name="open_in_app">باز کردن در…</string>
+    <string name="copy_link">کپی</string>
+    <string name="refresh">به‌روزرسانی</string>
+    <string name="theme">پوسته</string>
+    <string name="theme_system">سیستم</string>
+    <string name="theme_light">روشن</string>
+    <string name="theme_dark">تیره</string>
+    <string name="language">زبان</string>
+    <string name="about">درباره آیرون‌اپ — کلاینت اوپن‌سورس آیرون‌پنل</string>
+</resources>

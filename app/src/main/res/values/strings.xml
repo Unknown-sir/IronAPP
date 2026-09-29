@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IronAPP</string>
+    <string name="add_sub">Add subscription</string>
+    <string name="sub_hint">Paste sub link or token…</string>
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="connecting">Connecting…</string>
+    <string name="home">Home</string>
+    <string name="configs">Configs</string>
+    <string name="settings">Settings</string>
+    <string name="remaining_volume">Remaining volume</string>
+    <string name="remaining_time">Remaining time</string>
+    <string name="unlimited">Unlimited</string>
+    <string name="expired_blocked">This account is expired or out of traffic and cannot connect.</string>
+    <string name="scan_qr">Scan QR</string>
+    <string name="paste">Import</string>
+    <string name="open_in_app">Open in…</string>
+    <string name="copy_link">Copy</string>
+    <string name="refresh">Refresh</string>
+    <string name="theme">Theme</string>
+    <string name="theme_system">System</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
+    <string name="language">Language</string>
+    <string name="about">About IronAPP — open-source client for IronPanel</string>
+</resources>

@@ -1,0 +1,65 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Gradle 8.7
+        run: |
+          curl -fsSL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          echo "/tmp/gradle-8.7/bin" >> "$GITHUB_PATH"
+
+      - name: Accept licenses
+        run: yes | sdkmanager --licenses || true
+
+      - name: Build universal + per-ABI release APKs
+        run: gradle :app:assembleRelease --no-daemon --stacktrace
+        env:
+          IRONAPP_KEYSTORE_PATH: ${{ secrets.IRONAPP_KEYSTORE_PATH }}
+          IRONAPP_KEYSTORE_PASSWORD: ${{ secrets.IRONAPP_KEYSTORE_PASSWORD }}
+          IRONAPP_KEY_ALIAS: ${{ secrets.IRONAPP_KEY_ALIAS }}
+          IRONAPP_KEY_PASSWORD: ${{ secrets.IRONAPP_KEY_PASSWORD }}
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironapp-apks
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ironapp-apks
+          path: apks
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: apks/*.apk
+          generate_release_notes: true
