@@ -42,8 +42,11 @@ android {
         val keystoreFile = rootProject.file("keystore.properties")
         if (keystoreFile.exists()) keystoreFile.inputStream().use { keystoreProps.load(it) }
         create("release") {
-            val storePath = System.getenv("IRONAPP_KEYSTORE_PATH")
-                ?: keystoreProps.getProperty("storeFile")
+            // NOTE: unset GitHub Secrets arrive as "" (not null) — ignore blanks.
+            val storePath = listOfNotNull(
+                System.getenv("IRONAPP_KEYSTORE_PATH"),
+                keystoreProps.getProperty("storeFile")
+            ).firstOrNull { it.isNotBlank() }
             if (storePath != null) {
                 storeFile = rootProject.file(storePath)
                 storePassword = System.getenv("IRONAPP_KEYSTORE_PASSWORD")
