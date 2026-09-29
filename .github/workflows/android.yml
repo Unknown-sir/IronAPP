@@ -21,17 +21,16 @@ jobs:
           java-version: "17"
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android platform + build-tools
+        run: |
+          yes | sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+          yes | sdkmanager --licenses > /dev/null || true
 
       - name: Install Gradle 8.7
         run: |
           curl -fsSL https://services.gradle.org/distributions/gradle-8.7-bin.zip -o /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /tmp
           echo "/tmp/gradle-8.7/bin" >> "$GITHUB_PATH"
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses || true
 
       - name: Build universal + per-ABI release APKs
         run: gradle :app:assembleRelease --no-daemon --stacktrace
