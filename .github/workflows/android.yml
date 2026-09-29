@@ -32,6 +32,16 @@ jobs:
           unzip -q /tmp/gradle.zip -d /tmp
           echo "/tmp/gradle-8.7/bin" >> "$GITHUB_PATH"
 
+      - name: Create CI debug keystore (release key via Secrets when provided)
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -keystore ~/.android/debug.keystore -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 10950 \
+              -storepass android -keypass android \
+              -dname "CN=IronAPP CI, OU=CI, O=IronAPP, C=US"
+          fi
+
       - name: Build universal + per-ABI release APKs
         run: gradle :app:assembleRelease --no-daemon --stacktrace
         env:
