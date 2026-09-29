@@ -87,7 +87,7 @@ object VpnManager {
     private fun startTunnel(context: Context, snapshot: AppSnapshot, protocol: String) {
         _state.value = State.Preparing
         rememberSubscription(
-            snapshot.subscription.page.substringBefore("/s/"), snapshotKey(snapshot)
+            snapshot.user.subscription.page.substringBefore("/s/"), snapshotKey(snapshot)
         )
         scope.launch {
             // Fresh server verdict right before touching any core.
@@ -127,7 +127,7 @@ object VpnManager {
 
     private fun snapshotKey(snapshot: AppSnapshot): String {
         // token is the last /s/ path segment of the page URL.
-        return snapshot.subscription.page.substringAfterLast("/s/").substringBefore("/")
+        return snapshot.user.subscription.page.substringAfterLast("/s/").substringBefore("/")
             .ifEmpty { lastToken.orEmpty() }
     }
 
