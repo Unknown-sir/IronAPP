@@ -23,6 +23,7 @@ gomobile bind -v -o "$WORK/libbox.aar" \
   -target=android -androidapi "$ANDROID_API" \
   -javapkg "$JAVAPKG" -libname="$LIBNAME" \
   -trimpath -buildvcs=false \
+  -ldflags "-X github.com/sagernet/sing-box/constant.Version=v${SINGBOX_VERSION} -X runtime.godebugDefault=multipathtcp=0,tlssha1=1 -checklinkname=0 -s -w -buildid=" \
   -tags "$SINGBOX_TAGS" \
   ./experimental/libbox
 echo "[core] AAR ready: $WORK/libbox.aar (copy to app/libs/)"

@@ -77,6 +77,7 @@ jobs:
             -target=android -androidapi 21 \
             -javapkg=com.ironpanel -libname=box \
             -trimpath -buildvcs=false \
+            -ldflags "-X github.com/sagernet/sing-box/constant.Version=v${{ env.SINGBOX_VERSION }} -X runtime.godebugDefault=multipathtcp=0,tlssha1=1 -checklinkname=0 -s -w -buildid=" \
             -tags "$SINGBOX_TAGS" \
             ./experimental/libbox
 
