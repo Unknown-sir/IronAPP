@@ -16,10 +16,21 @@ go install golang.org/x/mobile/cmd/gomobile@latest
 gomobile init
 export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/28.0.13004108}"
-cd "$WORK/sing-box-src"
-gomobile bind -v -o "$WORK/libbox.aar" \
-  -target=android -androidapi "$ANDROID_API" \
-  -javapkg "$JAVAPKG" \
-  -tags "$SINGBOX_TAGS" \
-  ./experimental/libbox
+# Modern gomobile requires x/mobile in the current module: bind through a
+# wrapper module that re-exports the pinned source (same as CI).
+rm -rf "$WORK/core-bind" && mkdir -p "$WORK/core-bind"
+(
+  cd "$WORK/core-bind"
+  go mod init ironapp/boxbind
+  go get golang.org/x/mobile/cmd/gomobile@latest
+  go mod edit \
+    -require="github.com/SagerNet/sing-box@v${SINGBOX_VERSION}" \
+    -replace="github.com/SagerNet/sing-box=$WORK/sing-box-src"
+  go mod tidy
+  gomobile bind -v -o "$WORK/libbox.aar" \
+    -target=android -androidapi "$ANDROID_API" \
+    -javapkg "$JAVAPKG" \
+    -tags "$SINGBOX_TAGS" \
+    github.com/SagerNet/sing-box/experimental/libbox
+)
 echo "[core] AAR ready: $WORK/libbox.aar (copy to app/libs/)"
