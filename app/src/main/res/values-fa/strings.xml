@@ -24,4 +24,17 @@
     <string name="theme_dark">تیره</string>
     <string name="language">زبان</string>
     <string name="about">درباره آیرون‌اپ — کلاینت اوپن‌سورس آیرون‌پنل</string>
+    <string name="onboarding_hint">فقط یک لینک ساب کافی است: حجم، انقضا و همه پروتکل‌های فعال از پنل خوانده می‌شود.</string>
+    <string name="tap_to_connect">دکمه پاور را بزن تا با %1$s وصل شوی</string>
+    <string name="protected_">محافظت‌شده</string>
+    <string name="not_protected">بدون محافظت</string>
+    <string name="one_tap">اتصال تک‌ضربه‌ای</string>
+    <string name="view_only">فقط نمایش</string>
+    <string name="used">مصرف‌شده</string>
+    <string name="days">روز</string>
+    <string name="switch_account">تعویض اکانت</string>
+    <string name="legacy_proto_hint">این پروتکل قدیمی در اندروید جدید موتور داخلی ندارد — مشخصاتش در بخش کانفیگ‌ها برای ورود دستی نمایش داده می‌شود.</string>
+    <string name="open_telegram">باز کردن در تلگرام</string>
+    <string name="files">فایل‌ها</string>
+    <string name="core_info">هسته داخلی sing-box (VLESS / VMess / Trojan / Shadowsocks / WireGuard / Hysteria2 / SSH / OpenVPN / AnyConnect) — اتصال کاملاً داخل خود اپ.</string>
 </resources>

@@ -10,6 +10,9 @@ captures/
 .cxx/
 *.apk
 !app/release/*.apk
+# Locally-built sing-box core (CI rebuilds it every run; see core/README.md).
+app/libs/*.aar
+!app/libs/.gitkeep
 *.aab
 keystore/*.jks
 *.keystore

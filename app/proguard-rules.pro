@@ -1,5 +1,7 @@
 # IronAPP ProGuard rules.
 -keep class com.ironpanel.app.data.** { *; }
--keep class com.wireguard.** { *; }
--dontwarn com.wireguard.**
+-keep class com.ironpanel.libbox.** { *; }
+-keep class go.Seq { *; }
+-dontwarn com.ironpanel.libbox.**
+-dontwarn go.**
 -keepattributes Signature, InnerClasses, EnclosingMethod

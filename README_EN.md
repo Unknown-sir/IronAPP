@@ -4,8 +4,9 @@
 
 **Open-source Android client for [IronPanel](https://github.com/Unknown-sir/ironpanel)**
 
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Min SDK](https://img.shields.io/badge/minSdk-21%20(Android%205.0+)-blue)
+![Core](https://img.shields.io/badge/core-sing--box%20embedded-green)
 
 [🇮🇷 فارسی](README.md)
 
@@ -24,19 +25,27 @@
 - `minSdk 21` = Android **5.0+** (virtually every active device).
 - CI builds a **universal APK** plus **per-ABI APKs** for every core: `armeabi-v7a` · `arm64-v8a` · `x86` · `x86_64`.
 
-## Per-protocol connection (v1.0)
+## Per-protocol connection — fully in-app (v1.1.0)
 
-| Panel protocol | v1.0 path |
+No side apps are downloaded. Everything tunnels through the **embedded
+sing-box core** (built from pinned source in CI) in the app's own VpnService:
+
+| Panel protocol | In-app path |
 |---|---|
-| WireGuard | ✅ in-app (official `com.wireguard.android:tunnel`), fallback to the official app |
-| Xray (VLESS/VMess/Trojan/SS) | handoff to v2rayNG / NekoBox / Hiddify with the user's own links (embedded core roadmap: v1.1) |
-| OpenVPN | handoff to ics-openvpn with the user's `.ovpn` |
-| Hysteria2 | handoff with the user's URI |
-| Ocserv/L2TP/PPTP/SSH/MTProto | prefilled credentials + system-client deep link |
+| Xray (VLESS/VMess/Trojan/Shadowsocks) | ✅ embedded core |
+| WireGuard | ✅ embedded core |
+| Hysteria2 | ✅ embedded core |
+| SSH | ✅ embedded core |
+| OpenVPN (panel cert + tls-crypt) | ✅ embedded core (`openvpn-client` endpoint) |
+| Ocserv/AnyConnect | ✅ embedded core (`openconnect` endpoint) |
+| L2TP/PPTP | 📋 credential view (removed from Android 12+) |
+| MTProto | 📲 direct `tg://` link into Telegram |
 
 ## Design
 
-Material3 dynamic color, light/dark/system, Persian (RTL) + English, responsive on phones/tablets/portrait/landscape, usage ring, expiry countdown, protocol tabs, copy/open config screen.
+2026-style dark-first aurora UI: big power button with pulse ring, live
+up/down speeds, protocol carousel, glass usage card, expiry countdown.
+Persian (RTL) + English, light/dark/system, responsive on phones/tablets.
 
 ## Build
 

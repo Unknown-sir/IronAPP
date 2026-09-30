@@ -1,15 +1,19 @@
 package com.ironpanel.app
 
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import com.google.zxing.integration.android.IntentIntegrator
 import com.ironpanel.app.data.SubLinkParser
 import com.ironpanel.app.ui.AppShell
@@ -21,9 +25,19 @@ class MainActivity : ComponentActivity() {
 
     private val vm: AppViewModel by viewModels()
 
+    private val notifPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        VpnManager.snapshotRefContext = this
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(
+                this, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notifPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
         handleDeepLink(intent)
         setContent {
             val theme by vm.theme.collectAsState(initial = "system")

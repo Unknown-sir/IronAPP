@@ -1,13 +1,9 @@
 import java.util.Properties
 
-plugins {
-    id("com.android.application")
+plugins {    id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
-
-val wireguardEmbedded =
-    (project.findProperty("ironapp.wireguardEmbedded") as String? ?: "true").toBoolean()
 
 android {
     namespace = "com.ironpanel.app"
@@ -19,8 +15,8 @@ android {
         // plus per-ABI APKs (see splits below) cover every device.
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -124,11 +120,10 @@ dependencies {
     // QR scan of subscription links (works back to API 21).
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
 
-    // Embedded WireGuard core (Maven Central, Apache-2.0).
-    // Disable with -Pironapp.wireguardEmbedded=false to build a pure-handoff APK.
-    if (wireguardEmbedded) {
-        implementation("com.wireguard.android:tunnel:1.0.20230706")
-    }
+    // Embedded sing-box core (libbox.aar), built from pinned source by CI
+    // (`Android CI → core`) or locally via scripts/build-core.sh.
+    // Covers VLESS/VMess/Trojan/Shadowsocks/WireGuard/Hysteria2/SSH/OpenVPN/OpenConnect.
+    implementation(files("libs/libbox.aar"))
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

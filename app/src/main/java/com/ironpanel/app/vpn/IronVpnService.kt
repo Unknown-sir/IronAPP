@@ -7,17 +7,28 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.net.VpnService
 import android.os.Build
+import com.ironpanel.app.BuildConfig
 import com.ironpanel.app.MainActivity
+import com.ironpanel.app.vpn.box.BoxHost
+import com.ironpanel.app.vpn.box.BoxSetup
+import com.ironpanel.app.vpn.box.BoxTun
+import com.ironpanel.app.vpn.box.IronPlatformInterface
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
- * The app's VpnService. Embedded cores (WireGuard via the tunnel library)
- * park their tun fd here; handoff protocols use it for state + status polling.
+ * The app's single VpnService. It hosts the embedded sing-box core
+ * (CommandServer + platform TUN) — every in-app protocol runs here,
+ * so nothing ever leaves IronAPP to a third-party client.
  */
 class IronVpnService : VpnService() {
 
     companion object {
         const val ACTION_START = "com.ironpanel.app.vpn.START"
         const val ACTION_STOP = "com.ironpanel.app.vpn.STOP"
+        const val EXTRA_CONFIG = "config_json"
         const val EXTRA_LABEL = "label"
         const val CHANNEL_ID = "ironapp_vpn"
         const val NOTIF_ID = 1001
@@ -27,23 +38,52 @@ class IronVpnService : VpnService() {
             private set
     }
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var box: BoxHost? = null
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
-                runningLabel = intent.getStringExtra(EXTRA_LABEL)
-                startForegroundCompat()
+                val config = intent.getStringExtra(EXTRA_CONFIG).orEmpty()
+                val label = intent.getStringExtra(EXTRA_LABEL).orEmpty()
+                if (config.isBlank()) {
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
+                runningLabel = label
+                startForegroundCompat(label)
+                scope.launch {
+                    try {
+                        BoxSetup.ensure(this@IronVpnService, BuildConfig.VERSION_NAME)
+                        val host = BoxHost(IronPlatformInterface(this@IronVpnService, applicationContext))
+                        host.start(config)
+                        box = host
+                        VpnManager.onCoreStarted()
+                    } catch (e: Exception) {
+                        VpnManager.onCoreFailed(e.message ?: "core start failed")
+                        stopSelf()
+                    }
+                }
             }
-            ACTION_STOP -> {
-                runningLabel = null
-                VpnManager.onServiceStopped()
-                stopForegroundCompat()
-                stopSelf()
-            }
+            ACTION_STOP -> shutdown()
         }
         return START_STICKY
     }
 
-    private fun startForegroundCompat() {
+    private fun shutdown() {
+        runningLabel = null
+        try {
+            box?.stop()
+        } catch (_: Exception) {
+        }
+        box = null
+        BoxTun.close()
+        VpnManager.onServiceStopped()
+        stopForegroundCompat()
+        stopSelf()
+    }
+
+    private fun startForegroundCompat(label: String) {
         ensureChannel()
         val openIntent = Intent(this, MainActivity::class.java)
         val flags = PendingIntent.FLAG_UPDATE_CURRENT or
@@ -51,16 +91,16 @@ class IronVpnService : VpnService() {
         val pending = PendingIntent.getActivity(this, 0, openIntent, flags)
         val notif = if (Build.VERSION.SDK_INT >= 26) {
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("IronAPP")
-                .setContentText(runningLabel ?: "")
+                .setContentTitle("IronAPP — Protected")
+                .setContentText(label)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pending)
                 .build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
-                .setContentTitle("IronAPP")
-                .setContentText(runningLabel ?: "")
+                .setContentTitle("IronAPP — Protected")
+                .setContentText(label)
                 .setSmallIcon(android.R.drawable.ic_lock_lock)
                 .setContentIntent(pending)
                 .build()
@@ -88,9 +128,11 @@ class IronVpnService : VpnService() {
     }
 
     override fun onRevoke() {
-        runningLabel = null
-        VpnManager.onServiceStopped()
-        stopForegroundCompat()
-        stopSelf()
+        shutdown()
+    }
+
+    override fun onDestroy() {
+        shutdown()
+        super.onDestroy()
     }
 }

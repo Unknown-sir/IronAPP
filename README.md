@@ -4,8 +4,9 @@
 
 **کلاینت اوپن‌سورس اندروید برای [IronPanel](https://github.com/Unknown-sir/ironpanel)**
 
-![License](https://img.shields.io/badge/license-MIT-green)
+![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
 ![Min SDK](https://img.shields.io/badge/minSdk-21%20(Android%205.0+)-blue)
+![Core](https://img.shields.io/badge/core-sing--box%20embedded-green)
 ![Kotlin](https://img.shields.io/badge/kotlin-2.0-purple)
 ![Compose](https://img.shields.io/badge/UI-Compose%20Material3-orange)
 
@@ -30,21 +31,25 @@
   `armeabi-v7a` · `arm64-v8a` · `x86` · `x86_64`
 - اگر گوشی قدیمی universal را نصب می‌کند، در غیر این صورت نسخه مخصوص معماری خودش را.
 
-## اتصال هر پروتکل
+## اتصال هر پروتکل — کاملاً داخل خود اپ
 
-| پروتکل پنل | اتصال در v1.0 |
+هیچ اپ جانبی دانلود نمی‌شود. همه‌چیز با **هسته داخلی sing-box** (بیلدشده از سورس پین‌شده در CI) از طریق VpnService خود اپ تونل می‌شود:
+
+| پروتکل پنل | اتصال درون‌برنامه‌ای |
 |---|---|
-| WireGuard | ✅ داخل خود اپ (کتابخانه رسمی `com.wireguard.android:tunnel`)، با fallback به اپ رسمی WireGuard |
-| Xray/X (VLESS/VMess/Trojan/SS) | handoff به v2rayNG / NekoBox / Hiddify با همان لینک کاربر (هسته داخل‌اپی در نقشه v1.1) |
-| OpenVPN | handoff به ics-openvpn با فایل `.ovpn` همان کاربر |
-| Hysteria2 | handoff به Hiddify/NekoBox با URI همان کاربر |
-| Ocserv/L2TP/PPTP/SSH/MTProto | کپی credential آماده + دیپ‌لینک به کلاینت سیستمی (در اندروید 12+ راه دیگری نیست) |
+| Xray/X (VLESS/VMess/Trojan/Shadowsocks) | ✅ هسته داخلی |
+| WireGuard | ✅ هسته داخلی |
+| Hysteria2 | ✅ هسته داخلی |
+| SSH | ✅ هسته داخلی |
+| OpenVPN (گواهی‌محور + tls-crypt پنل) | ✅ هسته داخلی (endpoint openvpn-client) |
+| Ocserv/AnyConnect | ✅ هسته داخلی (endpoint openconnect) |
+| L2TP/PPTP | 📋 نمایش مشخصات (اندروید 12+ این APIها را حذف کرده) |
+| MTProto | 📲 باز شدن مستقیم لینک `tg://` در تلگرام |
 
-## طراحی
+## طراحی ۲۰۲۶
 
-- **Material3** با رنگ داینامیک، حالت روشن/تیره/سیستمی، فارسی (راست‌به‌چپ) + انگلیسی
-- ریسپانسیو برای گوشی و تبلت، عمودی و افقی (Compose adaptive)
-- حلقه مصرف حجمی، شمارش معکوس انقضا، تب پروتکل‌ها، صفحه کانفیگ‌ها با کپی/بازکردن
+- تم تیره اول با گرادیان aurora، دکمه پاور بزرگ با حلقه پالس، سرعت لحظه‌ای دانلود/آپلود، کاروسل پروتکل‌ها، کارت شیشه‌ای مصرف و شمارش معکوس انقضا
+- فارسی (راست‌به‌چپ) + انگلیسی، روشن/تیره/سیستمی، ریسپانسیو برای گوشی و تبلت
 
 ## بیلد
 

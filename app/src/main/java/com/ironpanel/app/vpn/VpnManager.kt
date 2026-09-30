@@ -2,10 +2,10 @@ package com.ironpanel.app.vpn
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.net.VpnService
 import com.ironpanel.app.data.AppSnapshot
 import com.ironpanel.app.data.SubscriptionRepository
+import com.ironpanel.app.vpn.box.ConfigParseException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,9 +16,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 /**
- * Owns connection state, enforces the quota/expiry gate before AND during
- * every session (polls /status every 45s; disconnects the moment the panel
- * reports access_ok=false, e.g. traffic exhausted or account expired).
+ * Owns connection state for the embedded core. The quota/expiry gate runs
+ * before every connect AND during the session (45s /status polls); the
+ * panel enforces the same gate server-side, so limits cannot be bypassed.
  */
 object VpnManager {
     const val VPN_REQUEST_CODE = 4401
@@ -34,11 +34,12 @@ object VpnManager {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val repo = SubscriptionRepository()
     private var pollJob: Job? = null
+    private var pollContext: Context? = null
+    private var tunnelContext: Context? = null
 
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state
 
-    fun hasSubscription(): Boolean = lastBaseUrl != null && lastToken != null
     var lastBaseUrl: String? = null
         private set
     var lastToken: String? = null
@@ -49,8 +50,15 @@ object VpnManager {
         lastToken = token
     }
 
-    /** Entry point from UI. Returns immediately; progress flows via [state]. */
-    fun connect(activity: Activity, snapshot: AppSnapshot, protocol: String) {
+    /** Protocols IronAPP tunnels itself (everything else is view-only). */
+    fun isEngineProtocol(protocol: String): Boolean =
+        protocol.lowercase() in SingBoxConnector.ENGINE_PROTOCOLS
+
+    fun connect(activity: Activity, snapshot: AppSnapshot, protocol: String, linkIndex: Int = 0) {
+        if (!isEngineProtocol(protocol)) {
+            _state.value = State.Error("protocol $protocol is view-only in IronAPP")
+            return
+        }
         val gate = QuotaGate.check(
             snapshot.user.accessOk, snapshot.user.connectable,
             snapshot.user.accessReason, snapshot.user.accessReasonEn,
@@ -61,89 +69,95 @@ object VpnManager {
         }
         val intent = VpnService.prepare(activity)
         if (intent != null) {
-            // System VPN consent — MainActivity forwards onActivityResult here.
-            activity.startActivityForResult(intent, VPN_REQUEST_CODE)
             PendingConnect.snapshot = snapshot
             PendingConnect.protocol = protocol
+            PendingConnect.linkIndex = linkIndex
+            PendingConnect.context = activity
+            activity.startActivityForResult(intent, VPN_REQUEST_CODE)
             return
         }
-        startTunnel(activity, snapshot, protocol)
+        startTunnel(activity, snapshot, protocol, linkIndex)
     }
 
     fun onVpnPermissionResult(resultOk: Boolean) {
         val snapshot = PendingConnect.snapshot
         val protocol = PendingConnect.protocol
+        val context = PendingConnect.context
         PendingConnect.snapshot = null
-        if (resultOk && snapshot != null && protocol != null) {
-            startTunnel(snapshotRefContext!!, snapshot, protocol)
+        PendingConnect.context = null
+        if (resultOk && snapshot != null && protocol != null && context != null) {
+            startTunnel(context, snapshot, protocol, PendingConnect.linkIndex)
         } else if (!resultOk) {
             _state.value = State.Error("VPN permission denied")
         }
     }
 
-    // Activity context captured for the permission round-trip.
-    var snapshotRefContext: Context? = null
-
-    private fun startTunnel(context: Context, snapshot: AppSnapshot, protocol: String) {
+    private fun startTunnel(context: Context, snapshot: AppSnapshot, protocol: String, linkIndex: Int) {
         _state.value = State.Preparing
+        tunnelContext = context.applicationContext
         rememberSubscription(
             snapshot.user.subscription.page.substringBefore("/s/"), snapshotKey(snapshot)
         )
         scope.launch {
-            // Fresh server verdict right before touching any core.
             val verdict = refreshGate()
             if (verdict is QuotaGate.Verdict.Deny) {
                 _state.value = State.Blocked(verdict.reasonFa, verdict.reasonEn)
                 return@launch
             }
-            // Mark our VpnService active for status + foreground notification.
-            context.startService(
-                Intent(context, IronVpnService::class.java)
-                    .setAction(IronVpnService.ACTION_START)
-                    .putExtra(IronVpnService.EXTRA_LABEL, "$protocol · ${snapshot.user.username}")
-            )
-            val result: Result<String> = when (protocol.lowercase()) {
-                "wireguard" -> WireGuardConnector.connect(context, snapshot)
-                "openvpn" -> OpenVpnConnector.connect(context, snapshot)
-                "xray" -> XrayConnector.connect(context, snapshot)
-                "hysteria2" -> HysteriaConnector.connect(context, snapshot)
-                else -> GenericConnector.connect(context, snapshot, protocol)
-            }
-            result.fold(
-                onSuccess = { label ->
-                    _state.value = State.Connected(protocol, label)
-                    startPolling(context)
-                },
-                onFailure = { e ->
-                    context.startService(
-                        Intent(context, IronVpnService::class.java)
-                            .setAction(IronVpnService.ACTION_STOP)
-                    )
-                    _state.value = State.Error(e.message ?: "Connect failed")
+            try {
+                SingBoxConnector.connect(context, snapshot, protocol, linkIndex)
+                // IronVpnService confirms via onCoreStarted(); time out just in case.
+                delay(30_000)
+                if (_state.value is State.Preparing) {
+                    if (IronVpnService.runningLabel != null) {
+                        _state.value = State.Connected(
+                            protocol, IronVpnService.runningLabel ?: protocol
+                        )
+                        startPolling(context)
+                    } else {
+                        _state.value = State.Error("core did not start")
+                    }
                 }
-            )
+            } catch (e: ConfigParseException) {
+                _state.value = State.Error(e.message ?: "bad config")
+            } catch (e: Exception) {
+                _state.value = State.Error(e.message ?: "connect failed")
+            }
+        }
+    }
+
+    /** Called by IronVpnService once the core is up. */
+    fun onCoreStarted() {
+        scope.launch {
+            if (_state.value is State.Preparing) {
+                val label = IronVpnService.runningLabel ?: "connected"
+                _state.value = State.Connected(label.substringBefore(" ·"), label)
+                tunnelContext?.let { startPolling(it) }
+            }
+        }
+    }
+
+    /** Called by IronVpnService when the core fails to start. */
+    fun onCoreFailed(message: String) {
+        scope.launch {
+            if (_state.value is State.Preparing) {
+                _state.value = State.Error(message)
+            }
         }
     }
 
     private fun snapshotKey(snapshot: AppSnapshot): String {
-        // token is the last /s/ path segment of the page URL.
         return snapshot.user.subscription.page.substringAfterLast("/s/").substringBefore("/")
             .ifEmpty { lastToken.orEmpty() }
     }
 
     fun disconnect(context: Context) {
-        scope.launch {
-            runCatching { WireGuardConnector.disconnect() }
-            runCatching { XrayConnector.disconnect() }
-            runCatching { OpenVpnConnector.disconnect() }
-            runCatching { HysteriaConnector.disconnect() }
-            context.startService(
-                Intent(context, IronVpnService::class.java)
-                    .setAction(IronVpnService.ACTION_STOP)
-            )
-            stopPolling()
-            _state.value = State.Idle
+        stopPolling()
+        try {
+            SingBoxConnector.disconnect(context)
+        } catch (_: Exception) {
         }
+        _state.value = State.Idle
     }
 
     fun onServiceStopped() {
@@ -153,24 +167,25 @@ object VpnManager {
         }
     }
 
+    private fun stopPolling() {
+        pollJob?.cancel()
+        pollJob = null
+    }
+
     private fun startPolling(context: Context) {
         stopPolling()
+        pollContext = context.applicationContext
         pollJob = scope.launch {
             while (true) {
                 delay(45_000)
                 val verdict = refreshGate()
                 if (verdict is QuotaGate.Verdict.Deny) {
                     _state.value = State.Blocked(verdict.reasonFa, verdict.reasonEn)
-                    disconnect(context)
+                    pollContext?.let { disconnect(it) }
                     break
                 }
             }
         }
-    }
-
-    private fun stopPolling() {
-        pollJob?.cancel()
-        pollJob = null
     }
 
     private suspend fun refreshGate(): QuotaGate.Verdict {
@@ -179,7 +194,6 @@ object VpnManager {
         return try {
             QuotaGate.check(repo.pollStatus(base, token))
         } catch (_: Exception) {
-            // Poll failure must not kill a live tunnel; server still enforces.
             QuotaGate.Verdict.Allow
         }
     }
@@ -187,5 +201,7 @@ object VpnManager {
     private object PendingConnect {
         var snapshot: AppSnapshot? = null
         var protocol: String? = null
+        var linkIndex: Int = 0
+        var context: Context? = null
     }
 }

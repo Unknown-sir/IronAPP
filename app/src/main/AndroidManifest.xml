@@ -8,21 +8,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
-        android:maxSdkVersion="30" />
-
-    <queries>
-        <package android:name="com.wireguard.android" />
-        <package android:name="de.blinkt.openvpn" />
-        <package android:name="com.v2ray.ang" />
-        <package android:name="moe.nb4a" />
-        <package android:name="app.hiddify.com" />
-        <package android:name="org.telegram.messenger" />
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" />
-        </intent>
-    </queries>
 
     <!-- Panels are often plain http://IP:port, so cleartext must stay allowed. -->
     <application
@@ -57,10 +42,14 @@
         <service
             android:name=".vpn.IronVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
+            android:foregroundServiceType="specialUse"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.net.VpnService" />
             </intent-filter>
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="vpn" />
         </service>
 
         <provider

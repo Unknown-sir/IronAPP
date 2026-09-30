@@ -24,4 +24,17 @@
     <string name="theme_dark">Dark</string>
     <string name="language">Language</string>
     <string name="about">About IronAPP — open-source client for IronPanel</string>
+    <string name="onboarding_hint">One sub link is enough: volume, expiry and every enabled protocol are read from the panel.</string>
+    <string name="tap_to_connect">Tap the power button to connect via %1$s</string>
+    <string name="protected_">Protected</string>
+    <string name="not_protected">Not protected</string>
+    <string name="one_tap">One-tap connect</string>
+    <string name="view_only">View only</string>
+    <string name="used">Used</string>
+    <string name="days">days</string>
+    <string name="switch_account">Switch account</string>
+    <string name="legacy_proto_hint">This legacy protocol has no in-app engine on modern Android — credentials are shown in Configs for manual entry.</string>
+    <string name="open_telegram">Open in Telegram</string>
+    <string name="files">Files</string>
+    <string name="core_info">Embedded sing-box core (VLESS / VMess / Trojan / Shadowsocks / WireGuard / Hysteria2 / SSH / OpenVPN / AnyConnect) — connects fully inside the app.</string>
 </resources>
