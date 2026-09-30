@@ -13,6 +13,7 @@ import com.ironpanel.app.vpn.box.BoxHost
 import com.ironpanel.app.vpn.box.BoxSetup
 import com.ironpanel.app.vpn.box.BoxTun
 import com.ironpanel.app.vpn.box.IronPlatformInterface
+import com.ironpanel.libbox.TunOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -70,8 +71,52 @@ class IronVpnService : VpnService() {
         return START_STICKY
     }
 
-    private fun shutdown() {
-        runningLabel = null
+    /**
+     * Build the platform TUN fd for the core. Builder() is an inner class,
+     * so this must live in the VpnService subclass itself.
+     */
+    fun createTun(options: TunOptions): Int {
+        var builder = Builder()
+            .setSession("IronAPP")
+            .setMtu(options.mtu)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            builder = builder.setMetered(false)
+        }
+        // Never route our own app through the tunnel (UI + panel API stay direct).
+        try {
+            builder.addDisallowedApplication(packageName)
+        } catch (_: Exception) {
+        }
+        val v4 = options.inet4Address
+        while (v4.hasNext()) {
+            val a = v4.next()
+            builder.addAddress(a.address(), a.prefix())
+        }
+        val v6 = options.inet6Address
+        while (v6.hasNext()) {
+            val a = v6.next()
+            builder.addAddress(a.address(), a.prefix())
+        }
+        if (options.autoRoute) {
+            try {
+                val dns = options.dnsServerAddress
+                while (dns.hasNext()) builder.addDnsServer(dns.next())
+            } catch (_: Exception) {
+            }
+            // Full-tunnel routes; our own package is excluded above.
+            builder.addRoute("0.0.0.0", 0)
+            try {
+                builder.addRoute("::", 0)
+            } catch (_: Exception) {
+            }
+        }
+        val pfd = builder.establish()
+            ?: error("ironapp: VpnService not prepared or revoked")
+        BoxTun.fd = pfd
+        return pfd.fd
+    }
+
+    private fun shutdown() {        runningLabel = null
         try {
             box?.stop()
         } catch (_: Exception) {

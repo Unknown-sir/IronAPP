@@ -49,6 +49,12 @@ class BoxHost(
     @Synchronized
     fun start(configJson: String) {
         stop()
+        // Fail fast on malformed configs before touching the TUN.
+        try {
+            Libbox.checkConfig(configJson)
+        } catch (e: Exception) {
+            throw IllegalArgumentException("core rejected config: ${e.message}")
+        }
         val commandServer = CommandServer(this, platform)
         commandServer.start()
         try {

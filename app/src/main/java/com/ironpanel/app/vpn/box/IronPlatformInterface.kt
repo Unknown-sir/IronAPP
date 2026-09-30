@@ -4,16 +4,15 @@ import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.net.VpnService
 import android.os.Build
 import android.os.Process
 import androidx.annotation.RequiresApi
 import androidx.core.app.NotificationCompat
+import com.ironpanel.app.vpn.IronVpnService
 import com.ironpanel.libbox.BridgeOptions
 import com.ironpanel.libbox.BridgeSession
 import com.ironpanel.libbox.ConnectionOwner
@@ -34,10 +33,13 @@ import java.net.NetworkInterface as JNetworkInterface
 /**
  * Host-side implementation of sing-box's mobile PlatformInterface.
  * Modeled on the official SFA client; trimmed to what IronAPP uses
- * (TUN + protect + interfaces + certificates). No root required.
+ * (TUN + protect + interfaces). No root required.
+ *
+ * NOTE: VpnService.Builder is an inner class, so TUN construction lives in
+ * IronVpnService (a VpnService subclass) and this class only delegates.
  */
 class IronPlatformInterface(
-    private val vpn: VpnService,
+    private val vpn: IronVpnService,
     private val appContext: Context,
 ) : PlatformInterface {
 
@@ -55,47 +57,7 @@ class IronPlatformInterface(
         vpn.protect(fd)
     }
 
-    override fun openTun(options: TunOptions): Int {
-        var builder = VpnService.Builder()
-            .setSession("IronAPP")
-            .setMtu(options.mtu)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder = builder.setMetered(false)
-        }
-        // Never route our own app through the tunnel (UI + panel API stay direct).
-        try {
-            builder.addDisallowedApplication(appContext.packageName)
-        } catch (_: PackageManager.NameNotFoundException) {
-        }
-
-        val v4 = options.inet4Address
-        while (v4.hasNext()) {
-            val a = v4.next()
-            builder.addAddress(a.address(), a.prefix())
-        }
-        val v6 = options.inet6Address
-        while (v6.hasNext()) {
-            val a = v6.next()
-            builder.addAddress(a.address(), a.prefix())
-        }
-        if (options.autoRoute) {
-            try {
-                val dns = options.dnsServerAddress
-                while (dns.hasNext()) builder.addDnsServer(dns.next())
-            } catch (_: Exception) {
-            }
-            // Full-tunnel routes; our own package is excluded above.
-            builder.addRoute("0.0.0.0", 0)
-            try {
-                builder.addRoute("::", 0)
-            } catch (_: Exception) {
-            }
-        }
-        val pfd = builder.establish()
-            ?: error("ironapp: VpnService not prepared or revoked")
-        BoxTun.fd = pfd
-        return pfd.fd
-    }
+    override fun openTun(options: TunOptions): Int = vpn.createTun(options)
 
     // ---------- connection owner ----------
 
@@ -249,9 +211,6 @@ class IronPlatformInterface(
     override fun readWIFIState(): WIFIState? = null
 
     override fun localDNSTransport(): LocalDNSTransport? = null
-
-    override fun systemCertificates(): StringIterator =
-        StringArray(systemCaPemList().iterator())
 
     // ---------- notifications ----------
 
