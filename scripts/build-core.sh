@@ -12,12 +12,13 @@ if [[ ! -d "$WORK/sing-box-src" ]]; then
     https://github.com/SagerNet/sing-box.git "$WORK/sing-box-src"
 fi
 export PATH="$PATH:$(go env GOPATH)/bin"
-cd "$WORK/sing-box-src"
-go install "$GOMOBILE_PKG"
+go install -v github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
+go install -v github.com/sagernet/gomobile/cmd/gobind@v0.1.13
 gomobile init
 export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/28.0.13004108}"
-go mod tidy
+# Bind from INSIDE the pristine sing-box module (go.mod untouched).
+cd "$WORK/sing-box-src"
 gomobile bind -v -o "$WORK/libbox.aar" \
   -target=android -androidapi "$ANDROID_API" \
   -javapkg "$JAVAPKG" -libname="$LIBNAME" \

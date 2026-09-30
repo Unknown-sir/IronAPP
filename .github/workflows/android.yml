@@ -58,11 +58,11 @@ jobs:
           git clone --depth 1 --branch v${{ env.SINGBOX_VERSION }} https://github.com/SagerNet/sing-box.git sing-box-src
           test -f sing-box-src/experimental/libbox/platform.go
 
-      - name: Install SagerNet gomobile fork (pinned by sing-box go.mod)
+      - name: Install SagerNet gomobile fork v0.1.13 (upstream-pinned)
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          cd sing-box-src
-          go install github.com/sagernet/gomobile/cmd/gomobile
+          go install -v github.com/sagernet/gomobile/cmd/gomobile@v0.1.13
+          go install -v github.com/sagernet/gomobile/cmd/gobind@v0.1.13
           gomobile init
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
@@ -70,11 +70,9 @@ jobs:
         run: |
           export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/28.0.13004108}"
-          # Bind from INSIDE the sing-box module (its own go.mod gains x/mobile),
-          # so package paths and internal/ visibility stay canonical.
+          # Bind from INSIDE the pristine sing-box module (go.mod untouched),
+          # exactly like upstream's own build_libbox invocations.
           cd sing-box-src
-          go get github.com/sagernet/gomobile/cmd/gomobile
-          go mod tidy
           gomobile bind -v -o "$GITHUB_WORKSPACE/libbox.aar" \
             -target=android -androidapi 21 \
             -javapkg=com.ironpanel -libname=box \
