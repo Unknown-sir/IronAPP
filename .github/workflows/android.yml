@@ -63,6 +63,9 @@ jobs:
           # NOTE: version queries need a module context, hence the probe dir.
           mkdir -p /tmp/gmprobe && cd /tmp/gmprobe
           test -f go.mod || go mod init gmprobe
+          echo "--- proxy versions raw ---"
+          go list -m -versions golang.org/x/mobile | tr ' ' '\n' | head -20
+          echo "--- end raw ---"
           XMOBILE_VER=""
           for v in $(go list -m -versions golang.org/x/mobile | tr ' ' '\n' | grep -E '^v0\.0\.0-' | sort -r); do
             if go install "golang.org/x/mobile/cmd/gomobile@$v" 2>/tmp/gmprobe_err.txt; then
