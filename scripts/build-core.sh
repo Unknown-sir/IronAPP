@@ -23,6 +23,8 @@ rm -rf "$WORK/core-bind" && mkdir -p "$WORK/core-bind"
   cd "$WORK/core-bind"
   go mod init ironapp/boxbind
   go get golang.org/x/mobile/cmd/gomobile@latest
+  go get -tool golang.org/x/mobile/cmd/gobind
+  printf '//go:build tools\n\npackage tools\n\nimport _ "github.com/SagerNet/sing-box/experimental/libbox"\n' > tools.go
   go mod edit \
     -require="github.com/SagerNet/sing-box@v${SINGBOX_VERSION}" \
     -replace="github.com/SagerNet/sing-box=$WORK/sing-box-src"
