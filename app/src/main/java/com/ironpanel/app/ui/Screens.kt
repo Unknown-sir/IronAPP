@@ -470,6 +470,7 @@ fun PowerButton(connected: Boolean, busy: Boolean, onClick: () -> Unit) {
             .scale(pressScale),
         Alignment.Center
     ) {
+        val idleTrack = MaterialTheme.colorScheme.surfaceVariant
         if (connected) {
             Canvas(Modifier.size((184 * pulse).dp)) {
                 drawCircle(
@@ -491,11 +492,7 @@ fun PowerButton(connected: Boolean, busy: Boolean, onClick: () -> Unit) {
                     brush = if (connected) Brush.sweepGradient(
                         listOf(BloodRed, EmberOrange, BloodRed)
                     ) else Brush.sweepGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.surfaceVariant,
-                            BloodRed.copy(alpha = 0.65f),
-                            MaterialTheme.colorScheme.surfaceVariant
-                        )
+                        listOf(idleTrack, BloodRed.copy(alpha = 0.65f), idleTrack)
                     ),
                     startAngle = -90f, sweepAngle = 360f, useCenter = false,
                     style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
