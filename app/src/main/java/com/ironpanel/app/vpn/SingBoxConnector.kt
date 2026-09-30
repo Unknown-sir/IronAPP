@@ -18,7 +18,10 @@ object SingBoxConnector {
 
     fun connect(context: Context, snapshot: AppSnapshot, protocol: String, linkIndex: Int = 0) {
         val config = buildConfig(snapshot, protocol, linkIndex)
-        val label = "$protocol · ${snapshot.user.username}"
+        connectRaw(context, config, "$protocol · ${snapshot.user.username}")
+    }
+
+    fun connectRaw(context: Context, config: String, label: String) {
         val start = Intent(context, IronVpnService::class.java)
             .setAction(IronVpnService.ACTION_START)
             .putExtra(IronVpnService.EXTRA_CONFIG, config)

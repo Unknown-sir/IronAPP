@@ -20,6 +20,10 @@
 2. The app reads from the panel's new endpoint (`GET /s/<token>/app.json` — panel **2.0.11+**): **traffic quota**, **expiry date**, **protocols enabled for that user**, that user's configs, Xray links and feed URLs.
 3. The user connects to **any enabled protocol**; when **traffic runs out or the date passes**, the app refuses to connect and kills live sessions via `/status` polling. The server enforces the same gate independently (403). Contract: [docs/IRONAPP.md](https://github.com/Unknown-sir/ironpanel/blob/main/docs/IRONAPP.md).
 
+## Single configs without a sub
+
+The Configs tab → “My configs” accepts a pasted **VLESS link, wireguard.conf or .ovpn**; no subscription needed, same in-app tunnel, no quota.
+
 ## Install on every Android
 
 - `minSdk 21` = Android **5.0+** (virtually every active device).

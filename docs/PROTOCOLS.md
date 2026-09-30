@@ -1,9 +1,14 @@
-# IronAPP protocol matrix (v1.1.0+)
+# IronAPP protocol matrix (v1.2.0+)
 
 Everything below tunnels **inside IronAPP** through the embedded sing-box
 core (`core/`, built from pinned source in CI). No third-party VPN client
 is ever downloaded. Source of truth for mapping: panel `docs/IRONAPP.md`
 plus `GET /s/<token>/app.json`.
+
+The generated core JSON follows the sing-box 1.12–1.14 migrations:
+type-based DNS servers, sniff/hijack-dns rule actions (no legacy dns
+outbound), WireGuard as endpoint. Panel config text itself is never
+modified — only translated 1:1.
 
 | Panel id | Panel payload | sing-box node | Converter |
 |---|---|---|---|
@@ -19,6 +24,12 @@ plus `GET /s/<token>/app.json`.
 Rules for every tunnel: check `QuotaGate` before connect, poll `/status`
 every 45s while connected, disconnect + show `access_reason` on deny.
 One session at a time; switching protocols rebuilds the config.
+
+## Single configs (no subscription)
+
+Configs tab → My configs: a pasted **VLESS URI**, **wireguard.conf** or
+**.ovpn** is validated with the same converters, stored privately on device
+and connected with the same engine. No quota applies (nothing to poll).
 
 Legacy notes:
 

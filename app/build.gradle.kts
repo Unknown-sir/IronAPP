@@ -15,8 +15,10 @@ android {
         // plus per-ABI APKs (see splits below) cover every device.
         minSdk = 21
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
+        // Release files are named Ironapp-<abi>-release.apk (universal + per-ABI).
+        base.archivesName.set("Ironapp")
         vectorDrawables { useSupportLibrary = true }
     }
 

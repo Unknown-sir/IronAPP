@@ -37,4 +37,13 @@
     <string name="open_telegram">Open in Telegram</string>
     <string name="files">Files</string>
     <string name="core_info">Embedded sing-box core (VLESS / VMess / Trojan / Shadowsocks / WireGuard / Hysteria2 / SSH / OpenVPN / AnyConnect) — connects fully inside the app.</string>
+    <string name="my_configs">My configs</string>
+    <string name="my_configs_hint">Single configs (VLESS link, WireGuard, OpenVPN) — no subscription needed.</string>
+    <string name="no_custom_yet">Nothing here yet — add your first config.</string>
+    <string name="add_config">Add config</string>
+    <string name="config_name">Name (optional)</string>
+    <string name="config_payload_hint">Paste VLESS link, wireguard.conf or .ovpn…</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="delete">Delete</string>
 </resources>

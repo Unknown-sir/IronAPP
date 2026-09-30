@@ -4,9 +4,15 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.ironpanel.app.data.AppSnapshot
+import com.ironpanel.app.data.CustomConfig
 import com.ironpanel.app.data.SessionStore
 import com.ironpanel.app.data.SubLinkParser
 import com.ironpanel.app.data.SubscriptionRepository
+import com.ironpanel.app.vpn.box.BoxNode
+import com.ironpanel.app.vpn.box.ConfigParseException
+import com.ironpanel.app.vpn.box.ovpnToNode
+import com.ironpanel.app.vpn.box.wireGuardConfToNode
+import com.ironpanel.app.vpn.box.xrayLinkToNode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -32,6 +38,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     val theme = store.theme
     val lastProtocol = store.lastProtocol
+    val customConfigs = store.customConfigs
 
     init {
         viewModelScope.launch {
@@ -96,7 +103,41 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _load.value = LoadState.Empty
     }
 
+    /** Validate + persist a hand-added single config (xray|wireguard|openvpn). */
+    fun addCustomConfig(name: String, kind: String, payload: String, onError: (String) -> Unit) {
+        val cleanName = name.trim().ifEmpty { kind }
+        try {
+            customNode(kind, payload) // throws with a precise reason
+        } catch (e: ConfigParseException) {
+            onError(e.message ?: "bad config")
+            return
+        } catch (e: Exception) {
+            onError(e.message ?: "bad config")
+            return
+        }
+        viewModelScope.launch {
+            store.addCustom(CustomConfig(name = cleanName, kind = kind, payload = payload.trim()))
+        }
+    }
+
+    fun deleteCustomConfig(id: String) {
+        viewModelScope.launch { store.deleteCustom(id) }
+    }
+
     fun saveTheme(mode: String) {
         viewModelScope.launch { store.saveTheme(mode) }
+    }
+
+    companion object {
+        /** Convert one hand-pasted config into a core node (shared with connect). */
+        fun customNode(kind: String, payload: String): BoxNode {
+            val body = payload.trim()
+            if (body.isEmpty()) throw ConfigParseException("empty config")
+            return when (kind) {
+                "wireguard" -> wireGuardConfToNode(body, "custom")
+                "openvpn" -> ovpnToNode(body, "custom")
+                else -> xrayLinkToNode(body.lineSequence().first { it.isNotBlank() }, "custom")
+            }
+        }
     }
 }

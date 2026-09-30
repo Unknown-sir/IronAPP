@@ -596,7 +596,10 @@ fun CredentialHintCard(snap: AppSnapshot, protocol: String) {
 @Composable
 fun ConfigsTab(vm: AppViewModel) {
     val load by vm.load.collectAsState()
+    val customs by vm.customConfigs.collectAsState(initial = emptyList())
     val context = LocalContext.current
+    var showAdd by remember { mutableStateOf(false) }
+    if (showAdd) AddCustomDialog(vm, onClose = { showAdd = false })
     Column(
         Modifier
             .fillMaxSize()
@@ -604,10 +607,79 @@ fun ConfigsTab(vm: AppViewModel) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                stringResource(R.string.my_configs),
+                style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold
+            )
+            AssistChip(onClick = { showAdd = true }, label = { Text("+ ${stringResource(R.string.add_config)}") })
+        }
+        Text(
+            stringResource(R.string.my_configs_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (customs.isEmpty()) {
+            Text(
+                stringResource(R.string.no_custom_yet),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        customs.forEach { custom ->
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+                )
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            custom.name, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f), maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            custom.kind,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        AssistChip(
+                            onClick = {
+                                val activity = context as? Activity ?: return@AssistChip
+                                try {
+                                    val node = AppViewModel.customNode(custom.kind, custom.payload)
+                                    VpnManager.connectNode(
+                                        activity, "${custom.kind} · ${custom.name}", node
+                                    )
+                                } catch (e: Exception) {
+                                    Share.copy(context, "Config error", e.message ?: "bad config")
+                                }
+                            },
+                            label = { Text(stringResource(R.string.connect)) }
+                        )
+                        AssistChip(
+                            onClick = { vm.deleteCustomConfig(custom.id) },
+                            label = { Text(stringResource(R.string.delete)) }
+                        )
+                    }
+                }
+            }
+        }
         val snap = (load as? LoadState.Ready)?.snapshot
         if (snap == null) {
-            Text(stringResource(R.string.add_sub))
-            return
+            return@Column
         }
         Text(
             "Xray · ${snap.user.xrayLinks.size}",
@@ -670,6 +742,55 @@ fun ConfigsTab(vm: AppViewModel) {
     }
 }
 
+@Composable
+fun AddCustomDialog(vm: AppViewModel, onClose: () -> Unit) {
+    var kind by remember { mutableStateOf("xray") }
+    var name by remember { mutableStateOf("") }
+    var payload by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text(stringResource(R.string.add_config)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("xray", "wireguard", "openvpn").forEach { k ->
+                        FilterChip(
+                            selected = kind == k,
+                            onClick = { kind = k },
+                            label = { Text(k) }
+                        )
+                    }
+                }
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(stringResource(R.string.config_name)) },
+                    singleLine = true, modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = payload,
+                    onValueChange = { payload = it; error = "" },
+                    label = { Text(stringResource(R.string.config_payload_hint)) },
+                    modifier = Modifier.fillMaxWidth().height(140.dp)
+                )
+                if (error.isNotEmpty()) {
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                vm.addCustomConfig(name, kind, payload) { error = it }
+                if (error.isEmpty()) onClose()
+            }) { Text(stringResource(R.string.save)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onClose) { Text(stringResource(R.string.cancel)) }
+        }
+    )
+}
+
 // ============================== settings ==============================
 
 @Composable
@@ -698,7 +819,7 @@ fun SettingsTab(vm: AppViewModel) {
         }
         Card(shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("IronAPP 1.1.0", fontWeight = FontWeight.Bold)
+                Text("IronAPP 1.2.0", fontWeight = FontWeight.Bold)
                 Text(
                     "panel ≥ 2.0.11 · GPL-3.0-or-later",
                     style = MaterialTheme.typography.bodySmall,

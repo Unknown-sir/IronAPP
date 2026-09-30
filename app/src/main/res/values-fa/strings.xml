@@ -37,4 +37,13 @@
     <string name="open_telegram">باز کردن در تلگرام</string>
     <string name="files">فایل‌ها</string>
     <string name="core_info">هسته داخلی sing-box (VLESS / VMess / Trojan / Shadowsocks / WireGuard / Hysteria2 / SSH / OpenVPN / AnyConnect) — اتصال کاملاً داخل خود اپ.</string>
+    <string name="my_configs">کانفیگ‌های من</string>
+    <string name="my_configs_hint">کانفیگ تکی (لینک VLESS، وایرگارد، اوپن‌وی‌پی‌ان) — بدون نیاز به ساب.</string>
+    <string name="no_custom_yet">هنوز چیزی نیست — اولین کانفیگ را اضافه کنید.</string>
+    <string name="add_config">افزودن کانفیگ</string>
+    <string name="config_name">نام (اختیاری)</string>
+    <string name="config_payload_hint">لینک VLESS، wireguard.conf یا ovpn را بچسبانید…</string>
+    <string name="save">ذخیره</string>
+    <string name="cancel">انصراف</string>
+    <string name="delete">حذف</string>
 </resources>

@@ -5,7 +5,9 @@ import android.content.Context
 import android.net.VpnService
 import com.ironpanel.app.data.AppSnapshot
 import com.ironpanel.app.data.SubscriptionRepository
+import com.ironpanel.app.vpn.box.BoxNode
 import com.ironpanel.app.vpn.box.ConfigParseException
+import com.ironpanel.app.vpn.box.buildConfigFromNode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,6 +38,8 @@ object VpnManager {
     private var pollJob: Job? = null
     private var pollContext: Context? = null
     private var tunnelContext: Context? = null
+    /** True while a hand-added (sub-less) config is active: no quota, no polling. */
+    private var customActive = false
 
     private val _state = MutableStateFlow<State>(State.Idle)
     val state: StateFlow<State> = _state
@@ -79,7 +83,33 @@ object VpnManager {
         startTunnel(activity, snapshot, protocol, linkIndex)
     }
 
+    /** Connect a hand-added single config (no subscription, no quota). */
+    fun connectNode(activity: Activity, label: String, node: BoxNode) {
+        customActive = false
+        val intent = VpnService.prepare(activity)
+        if (intent != null) {
+            PendingNode.label = label
+            PendingNode.node = node
+            PendingNode.context = activity
+            activity.startActivityForResult(intent, VPN_REQUEST_CODE)
+            return
+        }
+        startNodeTunnel(activity, label, node)
+    }
+
     fun onVpnPermissionResult(resultOk: Boolean) {
+        // Hand-added config pending?
+        val nodeLabel = PendingNode.label
+        val node = PendingNode.node
+        val nodeContext = PendingNode.context
+        PendingNode.label = null
+        PendingNode.node = null
+        PendingNode.context = null
+        if (nodeLabel != null && node != null && nodeContext != null) {
+            if (resultOk) startNodeTunnel(nodeContext, nodeLabel, node)
+            else _state.value = State.Error("VPN permission denied")
+            return
+        }
         val snapshot = PendingConnect.snapshot
         val protocol = PendingConnect.protocol
         val context = PendingConnect.context
@@ -132,7 +162,7 @@ object VpnManager {
             if (_state.value is State.Preparing) {
                 val label = IronVpnService.runningLabel ?: "connected"
                 _state.value = State.Connected(label.substringBefore(" ·"), label)
-                tunnelContext?.let { startPolling(it) }
+                if (!customActive) tunnelContext?.let { startPolling(it) }
             }
         }
     }
@@ -153,6 +183,7 @@ object VpnManager {
 
     fun disconnect(context: Context) {
         stopPolling()
+        customActive = false
         try {
             SingBoxConnector.disconnect(context)
         } catch (_: Exception) {
@@ -189,6 +220,7 @@ object VpnManager {
     }
 
     private suspend fun refreshGate(): QuotaGate.Verdict {
+        if (customActive) return QuotaGate.Verdict.Allow
         val base = lastBaseUrl ?: return QuotaGate.Verdict.Allow
         val token = lastToken ?: return QuotaGate.Verdict.Allow
         return try {
@@ -196,6 +228,41 @@ object VpnManager {
         } catch (_: Exception) {
             QuotaGate.Verdict.Allow
         }
+    }
+
+    private fun startNodeTunnel(context: Context, label: String, node: BoxNode) {
+        _state.value = State.Preparing
+        customActive = true
+        tunnelContext = context.applicationContext
+        scope.launch {
+            try {
+                val config = buildConfigFromNode(node)
+                SingBoxConnector.connectRaw(context, config, label)
+                delay(30_000)
+                if (_state.value is State.Preparing) {
+                    if (IronVpnService.runningLabel != null) {
+                        _state.value = State.Connected(
+                            label.substringBefore(" ·"), IronVpnService.runningLabel ?: label
+                        )
+                    } else {
+                        customActive = false
+                        _state.value = State.Error("core did not start")
+                    }
+                }
+            } catch (e: ConfigParseException) {
+                customActive = false
+                _state.value = State.Error(e.message ?: "bad config")
+            } catch (e: Exception) {
+                customActive = false
+                _state.value = State.Error(e.message ?: "connect failed")
+            }
+        }
+    }
+
+    private object PendingNode {
+        var label: String? = null
+        var node: BoxNode? = null
+        var context: Context? = null
     }
 
     private object PendingConnect {

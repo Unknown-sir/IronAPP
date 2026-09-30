@@ -8,10 +8,15 @@ const val PROXY_TAG = "ironapp-proxy"
 private val gson = Gson()
 
 /**
- * Build one self-contained sing-box config for (snapshot × protocol).
+ * Build one self-contained sing-box 1.14 config for (snapshot × protocol).
  * Exactly one proxy node (outbound or endpoint) becomes the route final;
  * everything else is local plumbing. Throws ConfigParseException when the
  * panel data cannot be converted.
+ *
+ * Shapes follow the 1.12–1.14 migrations: type-based DNS servers,
+ * sniff/hijack-dns rule actions (no legacy dns outbound), WireGuard as
+ * endpoint. The app never changes the user's own config text — it only
+ * translates it 1:1 into core JSON.
  */
 fun buildConfig(snapshot: AppSnapshot, protocol: String, linkIndex: Int = 0): String {
     val user = snapshot.user
@@ -48,7 +53,11 @@ fun buildConfig(snapshot: AppSnapshot, protocol: String, linkIndex: Int = 0): St
         }
         else -> throw ConfigParseException("protocol $protocol is view-only in IronAPP")
     }
+    return buildConfigFromNode(node)
+}
 
+/** Build a full config around one already-converted node (sub or custom). */
+fun buildConfigFromNode(node: BoxNode): String {
     val outbounds = mutableListOf<Map<String, Any?>>()
     val endpoints = mutableListOf<Map<String, Any?>>()
     @Suppress("UNCHECKED_CAST")
@@ -58,13 +67,12 @@ fun buildConfig(snapshot: AppSnapshot, protocol: String, linkIndex: Int = 0): St
     }
     outbounds.add(mapOf("type" to "direct", "tag" to "direct"))
     outbounds.add(mapOf("type" to "block", "tag" to "block"))
-    outbounds.add(mapOf("type" to "dns", "tag" to "dns-out"))
 
     val config = mapOf(
         "log" to mapOf("level" to "warning"),
         "dns" to mapOf(
             "servers" to listOf(
-                mapOf("tag" to "local-dns", "address" to "local")
+                mapOf("tag" to "local-dns", "type" to "local")
             ),
             "final" to "local-dns",
         ),
@@ -83,7 +91,8 @@ fun buildConfig(snapshot: AppSnapshot, protocol: String, linkIndex: Int = 0): St
         "endpoints" to endpoints.ifEmpty { null },
         "route" to mapOf(
             "rules" to listOf(
-                mapOf("protocol" to "dns", "outbound" to "dns-out")
+                mapOf("action" to "sniff"),
+                mapOf("protocol" to "dns", "action" to "hijack-dns"),
             ),
             "final" to PROXY_TAG,
             "auto_detect_interface" to true,

@@ -4,7 +4,16 @@ import android.net.Uri
 import android.util.Base64
 import org.json.JSONObject
 
-/** Result of converting one panel config into a sing-box node. */
+/**
+ * Convert panel (or hand-pasted) configs 1:1 into sing-box nodes.
+ *
+ * The app NEVER asks the user to reformat anything: every panel variant —
+ * extra query params, missing ports, multi-line files, comments — is
+ * accepted when it carries the fields the core needs, and rejected with a
+ * precise message otherwise.
+ */
+
+/** Result of converting one config into a sing-box node. */
 sealed interface BoxNode {
     data class Outbound(val json: Map<String, Any?>) : BoxNode
     data class Endpoint(val json: Map<String, Any?>) : BoxNode
@@ -12,7 +21,7 @@ sealed interface BoxNode {
 
 class ConfigParseException(message: String) : Exception(message)
 
-/** Drop null values (Gson would serialise them and sing-box rejects some). */
+/** Drop null values (Gson would serialise them and the core rejects some). */
 @Suppress("UNCHECKED_CAST")
 fun clean(value: Any?): Any? = when (value) {
     is Map<*, *> -> (value as Map<String, Any?>)
@@ -46,7 +55,8 @@ private fun tlsJson(security: String, sni: String, alpn: String): Map<String, An
     return mapOf(
         "enabled" to true,
         "server_name" to sni.ifEmpty { null },
-        "alpn" to alpn.ifEmpty { null },
+        "alpn" to alpn.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            .ifEmpty { null },
         "insecure" to false,
     )
 }
@@ -59,13 +69,14 @@ private fun realityJson(
     sid: String,
 ): Map<String, Any?>? {
     if (security != "reality") return null
+    if (pbk.isEmpty()) throw ConfigParseException("reality pbk missing")
     return mapOf(
         "enabled" to true,
         "server_name" to sni,
         "reality" to mapOf(
             "enabled" to true,
             "public_key" to pbk,
-            "short_id" to sid,
+            "short_id" to sid.ifEmpty { null },
         ),
         "utls" to mapOf(
             "enabled" to true,
@@ -88,14 +99,27 @@ private fun transportJson(network: String, uri: Uri): Map<String, Any?>? {
             "type" to "grpc",
             "service_name" to qp(uri, "serviceName").ifEmpty { "ironpanel-grpc" },
         )
+        "httpupgrade", "http" -> mapOf(
+            "type" to "httpupgrade",
+            "path" to qp(uri, "path").ifEmpty { "/" },
+            "headers" to mapOf("Host" to qp(uri, "host").ifEmpty { null }),
+        )
         "tcp", "raw", "" -> null
-        else -> throw ConfigParseException("transport $network not supported yet")
+        else -> null // unknown transports are ignored, not fatal
     }
 }
 
 private fun muxJson(uri: Uri): Map<String, Any?>? {
     if (qp(uri, "mux") !in listOf("1", "true")) return null
     return mapOf("enabled" to true, "protocol" to "smux", "max_connections" to 4)
+}
+
+private fun packetEncodingJson(uri: Uri): String? {
+    return when (qp(uri, "packetEncoding").lowercase()) {
+        "packetaddr" -> "packetaddr"
+        "xudp" -> "xudp"
+        else -> null
+    }
 }
 
 private fun vlessToJson(uri: Uri, tag: String): Map<String, Any?> {
@@ -114,7 +138,7 @@ private fun vlessToJson(uri: Uri, tag: String): Map<String, Any?> {
         "server_port" to port,
         "uuid" to uuid,
         "flow" to qp(uri, "flow").ifEmpty { null },
-        "network" to network,
+        "packet_encoding" to packetEncodingJson(uri),
         "tls" to tls,
         "transport" to transportJson(network, uri),
         "multiplex" to muxJson(uri),
@@ -150,9 +174,10 @@ private fun vmessToJson(raw: String, tag: String): Map<String, Any?> {
             "type" to "grpc",
             "service_name" to o.optString("path", "ironpanel-grpc").ifEmpty { "ironpanel-grpc" },
         )
-        "tcp", "raw", "" -> null
-        else -> throw ConfigParseException("transport $net not supported yet")
+        "tcp", "raw", "kcp", "" -> null
+        else -> null
     }
+    val security = o.optString("scy", "auto").ifEmpty { "auto" }
     return mapOf(
         "type" to "vmess",
         "tag" to tag,
@@ -161,11 +186,13 @@ private fun vmessToJson(raw: String, tag: String): Map<String, Any?> {
             ?: throw ConfigParseException("bad port"),
         "uuid" to o.optString("id").ifEmpty { throw ConfigParseException("missing id") },
         "alter_id" to o.optString("aid", "0").toIntOrNull(),
-        "security" to o.optString("scy", "auto").ifEmpty { "auto" },
+        "security" to security,
         "tls" to if (tlsOn) {
             mapOf(
                 "enabled" to true,
                 "server_name" to o.optString("sni").ifEmpty { null },
+                "alpn" to o.optString("alpn").split(",").map { it.trim() }
+                    .filter { it.isNotEmpty() }.ifEmpty { null },
                 "insecure" to false,
             )
         } else null,
@@ -185,7 +212,7 @@ private fun trojanToJson(uri: Uri, tag: String): Map<String, Any?> {
         "server" to host,
         "server_port" to port,
         "password" to password,
-        "tls" to (tlsJson(security, qp(uri, "sni"), "") ?: mapOf("enabled" to true)),
+        "tls" to (tlsJson(security, qp(uri, "sni"), qp(uri, "alpn")) ?: mapOf("enabled" to true)),
         "transport" to transportJson(network, uri),
         "multiplex" to muxJson(uri),
     )
@@ -215,6 +242,9 @@ private fun ssToJson(uri: Uri, tag: String): Map<String, Any?> {
         password = decoded.substringAfter(":")
     }
     if (method.isEmpty() || password.isEmpty()) throw ConfigParseException("bad ss userinfo")
+    if (qp(uri, "plugin").isNotEmpty()) {
+        throw ConfigParseException("ss plugins are not supported in-app")
+    }
     return mapOf(
         "type" to "shadowsocks",
         "tag" to tag,
@@ -242,15 +272,27 @@ fun hysteriaToNode(body: String, tag: String): BoxNode {
     val host = uri.host ?: throw ConfigParseException("missing host")
     val port = if (uri.port > 0) uri.port else 443
     val sni = qp(uri, "sni").ifEmpty { host }
+    val obfsType = qp(uri, "obfs").lowercase()
+    fun mbps(raw: String, fallback: String): String {
+        val v = raw.trim().ifEmpty { return fallback }
+        // Plain numbers mean Mbps in the wild; sing-box wants an explicit unit.
+        return if (v.matches(Regex("^\\d+(\\.\\d+)?$"))) "$v Mbps" else v
+    }
     return BoxNode.Outbound(
         mapOf(
             "type" to "hysteria2",
             "tag" to tag,
             "server" to host,
             "server_port" to port,
-            "up_mbps" to 100,
-            "down_mbps" to 300,
+            "up_mbps" to mbps(qp(uri, "up"), "100 Mbps"),
+            "down_mbps" to mbps(qp(uri, "down"), "300 Mbps"),
             "password" to password,
+            "obfs" to if (obfsType in listOf("salamander")) {
+                mapOf(
+                    "type" to "salamander",
+                    "password" to qp(uri, "obfs-password").ifEmpty { null },
+                )
+            } else null,
             "tls" to mapOf(
                 "enabled" to true,
                 "server_name" to sni,
@@ -260,11 +302,10 @@ fun hysteriaToNode(body: String, tag: String): BoxNode {
     )
 }
 
-/** Panel wireguard.conf → sing-box wireguard outbound. */
+/** Panel (or hand-pasted) wireguard.conf → sing-box wireguard ENDPOINT. */
 fun wireGuardConfToNode(conf: String, tag: String): BoxNode {
     var privateKey = ""
-    var address = ""
-    var dns = ""
+    val addresses = mutableListOf<String>()
     var mtu = 0
     var publicKey = ""
     var endpoint = ""
@@ -281,15 +322,18 @@ fun wireGuardConfToNode(conf: String, tag: String): BoxNode {
             when (section) {
                 "[interface]" -> when (key) {
                     "privatekey" -> privateKey = value
-                    "address" -> address = value.split(",").firstOrNull()?.trim() ?: ""
-                    "dns" -> dns = value
+                    "address" -> addresses.addAll(
+                        value.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    )
+                    "dns" -> Unit // core DNS is used
                     "mtu" -> mtu = value.toIntOrNull() ?: 0
                 }
                 "[peer]" -> when (key) {
-                    "publickey" -> publicKey = value
-                    "endpoint" -> endpoint = value
+                    "publickey" -> if (publicKey.isEmpty()) publicKey = value
+                    "endpoint" -> if (endpoint.isEmpty()) endpoint = value
                     "persistentkeepalive" -> keepalive = value.toIntOrNull() ?: 0
-                    "presharedkey" -> preshared = value
+                    "presharedkey" -> if (preshared.isEmpty()) preshared = value
+                    "allowedips" -> Unit // full tunnel is assumed
                 }
             }
         }
@@ -297,32 +341,61 @@ fun wireGuardConfToNode(conf: String, tag: String): BoxNode {
     if (privateKey.isEmpty() || publicKey.isEmpty() || endpoint.isEmpty()) {
         throw ConfigParseException("incomplete wireguard.conf")
     }
-    val host = endpoint.substringBeforeLast(":")
+    val host = endpoint.substringBeforeLast(":").trim('[', ']')
     val port = endpoint.substringAfterLast(":").toIntOrNull()
         ?: throw ConfigParseException("bad endpoint")
-    if (address.isEmpty()) throw ConfigParseException("missing address")
-    return BoxNode.Outbound(
+    if (addresses.isEmpty()) throw ConfigParseException("missing address")
+    return BoxNode.Endpoint(
         mapOf(
             "type" to "wireguard",
             "tag" to tag,
-            "server" to host,
-            "server_port" to port,
-            "local_address" to listOf(address),
+            "address" to addresses,
             "private_key" to privateKey,
-            "peer_public_key" to publicKey,
-            "pre_shared_key" to preshared.ifEmpty { null },
-            "reserved" to null,
+            "peers" to listOf(
+                mapOf(
+                    "address" to host,
+                    "port" to port,
+                    "public_key" to publicKey,
+                    "pre_shared_key" to preshared.ifEmpty { null },
+                    "allowed_ips" to listOf("0.0.0.0/0"),
+                    "persistent_keepalive_interval" to if (keepalive > 0) keepalive else null,
+                )
+            ),
             "mtu" to if (mtu > 0) mtu else null,
-            "persistent_keepalive_interval" to if (keepalive > 0) keepalive else null,
         )
     )
 }
 
-/** Panel ssh.txt (Server/Port/Username/Password lines) → sing-box ssh outbound. */
+/**
+ * Panel ssh.txt (Server/Port/Username/Password lines) or `ssh://user:pass@host:port`
+ * → sing-box ssh outbound.
+ */
 fun sshTxtToNode(body: String, tag: String): BoxNode {
+    val first = body.lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+    if (first.lowercase().startsWith("ssh://")) {
+        val uri = try {
+            Uri.parse(first)
+        } catch (_: Exception) {
+            throw ConfigParseException("bad ssh URI")
+        }
+        val userInfo = (uri.userInfo ?: "").split(":")
+        val host = uri.host ?: throw ConfigParseException("missing host")
+        val port = if (uri.port > 0) uri.port else 22
+        val user = userInfo.getOrNull(0).orEmpty()
+        val pass = userInfo.getOrNull(1).orEmpty()
+        if (user.isEmpty() || pass.isEmpty()) throw ConfigParseException("ssh credentials incomplete")
+        return BoxNode.Outbound(
+            mapOf(
+                "type" to "ssh", "tag" to tag,
+                "server" to host, "server_port" to port,
+                "user" to user, "password" to pass,
+            )
+        )
+    }
     val fields = keyValueLines(body)
-    val host = fields["server"]?.substringBefore(":")?.trim().orEmpty()
-    val port = fields["server"]?.substringAfter(":", "")?.trim()?.toIntOrNull()
+    val serverRaw = fields["server"].orEmpty()
+    val host = serverRaw.substringBefore(":").trim()
+    val port = serverRaw.substringAfter(":", "").trim().toIntOrNull()
         ?: fields["port"]?.trim()?.toIntOrNull() ?: 22
     val user = fields["username"].orEmpty()
     val pass = fields["password"].orEmpty()
@@ -331,12 +404,9 @@ fun sshTxtToNode(body: String, tag: String): BoxNode {
     }
     return BoxNode.Outbound(
         mapOf(
-            "type" to "ssh",
-            "tag" to tag,
-            "server" to host,
-            "server_port" to port,
-            "user" to user,
-            "password" to pass,
+            "type" to "ssh", "tag" to tag,
+            "server" to host, "server_port" to port,
+            "user" to user, "password" to pass,
         )
     )
 }
@@ -374,46 +444,56 @@ fun keyValueLines(body: String): Map<String, String> {
     return out
 }
 
-/** Panel *.ovpn (cert-only, optional tls-crypt) → sing-box openvpn-client endpoint. */
+/**
+ * Panel *.ovpn (cert-only, optional tls-crypt/tls-auth, any remote lines)
+ * → sing-box openvpn-client endpoint. Unknown directives are ignored;
+ * only missing remotes/certs or interactive auth-user-pass fail.
+ */
 fun ovpnToNode(ovpn: String, tag: String): BoxNode {
     var proto = "udp"
-    var remoteHost = ""
-    var remotePort = 1194
+    val remotes = mutableListOf<Pair<String, Int>>()
     var cipher = ""
     val dataCiphers = mutableListOf<String>()
     var auth = ""
     var authUserPass = false
+    var keyDirection = ""
     val blocks = mutableMapOf<String, StringBuilder>()
     var current: StringBuilder? = null
-    var currentName = ""
     ovpn.lineSequence().forEach { rawLine ->
         val line = rawLine.trim()
         when {
             line.startsWith("<") && !line.startsWith("</") && line.endsWith(">") -> {
-                currentName = line.substring(1, line.length - 1)
                 current = StringBuilder()
-                blocks[currentName] = current!!
+                blocks[line.substring(1, line.length - 1)] = current!!
             }
-            line.startsWith("</") -> {
-                current = null
-                currentName = ""
-            }
+            line.startsWith("</") -> current = null
             current != null -> current!!.appendLine(rawLine)
             line.startsWith("proto ") -> proto = line.removePrefix("proto ").trim()
             line.startsWith("remote ") -> {
                 val parts = line.removePrefix("remote ").trim().split(Regex("\\s+"))
-                if (parts.isNotEmpty()) remoteHost = parts[0]
-                if (parts.size > 1) remotePort = parts[1].toIntOrNull() ?: remotePort
+                if (parts.isNotEmpty() && parts[0].isNotEmpty()) {
+                    val port = parts.getOrNull(1)?.toIntOrNull() ?: 1194
+                    remotes.add(parts[0] to port)
+                }
             }
             line.startsWith("cipher ") -> cipher = line.removePrefix("cipher ").trim()
             line.startsWith("data-ciphers ") -> dataCiphers.addAll(
                 line.removePrefix("data-ciphers ").trim().split(":").map { it.trim() }
             )
-            line.startsWith("auth ") && !line.startsWith("auth-") -> auth = line.removePrefix("auth ").trim()
+            line.startsWith("auth ") && !line.startsWith("auth-") ->
+                auth = line.removePrefix("auth ").trim()
             line == "auth-user-pass" || line.startsWith("auth-user-pass ") -> authUserPass = true
+            line.startsWith("key-direction ") ->
+                keyDirection = line.removePrefix("key-direction ").trim()
+            line.startsWith("tls-auth ") -> {
+                // tls-auth <file> <direction> without an inline block: nothing to embed.
+                if (!blocks.containsKey("tls-auth")) keyDirection =
+                    line.removePrefix("tls-auth ").trim().split(Regex("\\s+"))
+                        .getOrNull(1) ?: keyDirection
+            }
         }
     }
-    if (remoteHost.isEmpty()) throw ConfigParseException("no remote in .ovpn")
+    if (remotes.isEmpty()) throw ConfigParseException("no remote in .ovpn")
     if (authUserPass) throw ConfigParseException("ovpn needs interactive credentials")
     val ca = blocks["ca"]?.toString()?.trim().orEmpty()
     val cert = blocks["cert"]?.toString()?.trim().orEmpty()
@@ -422,24 +502,38 @@ fun ovpnToNode(ovpn: String, tag: String): BoxNode {
         throw ConfigParseException("ovpn missing inline certificates")
     }
     val network = if (proto.lowercase().startsWith("tcp")) "tcp" else "udp"
-    val tlsCrypt = blocks["tls-crypt"]?.toString()?.trim()
+    val first = remotes.first()
+    // sing-box forbids `server` together with `servers`: single remote uses
+    // server/server_port, multiple remotes use the servers list only.
+    val useServersList = remotes.size > 1
+    val serversList = remotes.map { (h, p) ->
+        mapOf("server" to h, "server_port" to p, "network" to network)
+    }
+    val tlsCrypt = blocks["tls-crypt"]?.toString()?.trim()?.ifEmpty { null }
+    val tlsAuth = blocks["tls-auth"]?.toString()?.trim()?.ifEmpty { null }
+    val controlWrap: Map<String, Any?>? = when {
+        tlsCrypt != null -> mapOf("type" to "tls_crypt", "key" to listOf(tlsCrypt))
+        tlsAuth != null -> mapOf(
+            "type" to "tls_auth",
+            "key" to listOf(tlsAuth),
+            "direction" to keyDirection.ifEmpty { null },
+        )
+        else -> null
+    }
     return BoxNode.Endpoint(
         mapOf(
             "type" to "openvpn-client",
             "tag" to tag,
             "mode" to "tls",
-            "server" to remoteHost,
-            "server_port" to remotePort,
+            "server" to if (useServersList) null else first.first,
+            "server_port" to if (useServersList) null else first.second,
+            "servers" to if (useServersList) serversList else null,
             "network" to network,
-            "username" to null,
-            "password" to null,
             "tls" to mapOf(
                 "certificate" to listOf(ca),
                 "client_certificate" to listOf(cert),
                 "client_key" to listOf(key),
-                "control_wrap" to tlsCrypt?.let {
-                    mapOf("type" to "tls_crypt", "key" to listOf(it))
-                },
+                "control_wrap" to controlWrap,
             ),
             "data_ciphers" to dataCiphers.ifEmpty { null },
             // NOTE: `cipher` is static-key-only in sing-box; TLS mode uses data_ciphers/auth.
