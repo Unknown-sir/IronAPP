@@ -18,6 +18,11 @@ jobs:
   core:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    env:
+      # sing-box v1.14.2 linknames Go 1.25 runtime internals: NEVER let the
+      # toolchain auto-upgrade (fail fast instead of corrupt .so files).
+      GOTOOLCHAIN: local
+      GOFLAGS: -mod=mod
     steps:
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -50,10 +55,21 @@ jobs:
           git clone --depth 1 --branch v${{ env.SINGBOX_VERSION }} https://github.com/SagerNet/sing-box.git sing-box-src
           test -f sing-box-src/experimental/libbox/platform.go
 
-      - name: Install gomobile
+      - name: Install gomobile (pinned to Go 1.25 era)
         run: |
           export PATH="$PATH:$(go env GOPATH)/bin"
-          go install golang.org/x/mobile/cmd/gomobile@latest
+          # Resolve the newest x/mobile that still builds with Go 1.25
+          # (newer ones require go >= 1.26 and break sing-box linknames).
+          XMOBILE_VER=""
+          for v in $(go list -m -versions golang.org/x/mobile | tr ' ' '\n' | grep -E '^v0\.0\.0-' | sort -r); do
+            if go install "golang.org/x/mobile/cmd/gomobile@$v" 2>/dev/null; then
+              XMOBILE_VER="$v"
+              echo "gomobile $v selected"
+              break
+            fi
+          done
+          test -n "$XMOBILE_VER" || (echo "no go1.25-compatible gomobile found" && exit 1)
+          echo "XMOBILE_VER=$XMOBILE_VER" >> "$GITHUB_ENV"
           gomobile init
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
@@ -64,8 +80,8 @@ jobs:
           # Bind from INSIDE the sing-box module (its own go.mod gains x/mobile),
           # so package paths and internal/ visibility stay canonical.
           cd sing-box-src
-          go get golang.org/x/mobile/cmd/gomobile@latest
-          go get -tool golang.org/x/mobile/cmd/gobind
+          go get "golang.org/x/mobile/cmd/gomobile@$XMOBILE_VER"
+          go get -tool "golang.org/x/mobile/cmd/gobind@$XMOBILE_VER"
           go mod tidy
           gomobile bind -v -o "$GITHUB_WORKSPACE/libbox.aar" \
             -target=android -androidapi 21 \
