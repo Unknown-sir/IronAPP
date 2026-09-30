@@ -61,6 +61,17 @@ object CrashReporter {
                     "which points at the native core — please send this to support."
             )
         }
+        // Go runtime stderr (panics print here via Libbox.setup redirect).
+        try {
+            val goLog = File(File(context.filesDir, "box"), "CrashReport-ironapp.log")
+            if (goLog.exists() && goLog.length() > 0) {
+                val tail = goLog.readText().takeLast(3000)
+                if (tail.isNotBlank()) {
+                    parts.add("---- core log tail ----\n$tail")
+                }
+            }
+        } catch (_: Exception) {
+        }
         return if (parts.isEmpty()) null else parts.joinToString("\n\n")
     }
 

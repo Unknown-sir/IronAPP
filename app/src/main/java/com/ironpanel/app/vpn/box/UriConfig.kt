@@ -273,10 +273,13 @@ fun hysteriaToNode(body: String, tag: String): BoxNode {
     val port = if (uri.port > 0) uri.port else 443
     val sni = qp(uri, "sni").ifEmpty { host }
     val obfsType = qp(uri, "obfs").lowercase()
-    fun mbps(raw: String, fallback: String): String {
-        val v = raw.trim().ifEmpty { return fallback }
-        // Plain numbers mean Mbps in the wild; sing-box wants an explicit unit.
-        return if (v.matches(Regex("^\\d+(\\.\\d+)?$"))) "$v Mbps" else v
+    fun mbps(raw: String, fallback: Int): Int {
+        // sing-box wants a plain Mbps integer (string form is rejected).
+        val v = raw.trim()
+        v.toIntOrNull()?.let { return it }
+        Regex("^(\\d+(\\.\\d+)?)\\s*(mbps|mb/s|mbit.*)?$", RegexOption.IGNORE_CASE)
+            .find(v)?.let { return it.groupValues[1].toDoubleOrNull()?.toInt() ?: fallback }
+        return fallback
     }
     return BoxNode.Outbound(
         mapOf(
@@ -284,8 +287,8 @@ fun hysteriaToNode(body: String, tag: String): BoxNode {
             "tag" to tag,
             "server" to host,
             "server_port" to port,
-            "up_mbps" to mbps(qp(uri, "up"), "100 Mbps"),
-            "down_mbps" to mbps(qp(uri, "down"), "300 Mbps"),
+            "up_mbps" to mbps(qp(uri, "up"), 100),
+            "down_mbps" to mbps(qp(uri, "down"), 300),
             "password" to password,
             "obfs" to if (obfsType in listOf("salamander")) {
                 mapOf(

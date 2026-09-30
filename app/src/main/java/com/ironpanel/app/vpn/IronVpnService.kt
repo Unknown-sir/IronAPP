@@ -84,46 +84,59 @@ class IronVpnService : VpnService() {
     /**
      * Build the platform TUN fd for the core. Builder() is an inner class,
      * so this must live in the VpnService subclass itself.
+     * Fully guarded: any failure becomes a clean core error, and every step
+     * leaves a breadcrumb so a native death is attributable.
      */
     fun createTun(options: TunOptions): Int {
-        var builder = Builder()
-            .setSession("IronAPP")
-            .setMtu(options.mtu)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder = builder.setMetered(false)
-        }
-        // Never route our own app through the tunnel (UI + panel API stay direct).
+        val ctx = applicationContext
+        com.ironpanel.app.vpn.box.BoxCrumbs.mark(ctx, "40-tun-enter")
         try {
-            builder.addDisallowedApplication(packageName)
-        } catch (_: Exception) {
-        }
-        val v4 = options.inet4Address
-        while (v4.hasNext()) {
-            val a = v4.next()
-            builder.addAddress(a.address(), a.prefix())
-        }
-        val v6 = options.inet6Address
-        while (v6.hasNext()) {
-            val a = v6.next()
-            builder.addAddress(a.address(), a.prefix())
-        }
-        if (options.autoRoute) {
+            var builder = Builder()
+                .setSession("IronAPP")
+                .setMtu(options.mtu)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                builder = builder.setMetered(false)
+            }
+            // Never route our own app through the tunnel (UI + panel API stay direct).
             try {
-                val dns = options.dnsServerAddress
-                while (dns.hasNext()) builder.addDnsServer(dns.next())
+                builder.addDisallowedApplication(packageName)
             } catch (_: Exception) {
             }
-            // Full-tunnel routes; our own package is excluded above.
-            builder.addRoute("0.0.0.0", 0)
-            try {
-                builder.addRoute("::", 0)
-            } catch (_: Exception) {
+            val v4 = options.inet4Address
+            while (v4.hasNext()) {
+                val a = v4.next()
+                builder.addAddress(a.address(), a.prefix())
             }
+            val v6 = options.inet6Address
+            while (v6.hasNext()) {
+                val a = v6.next()
+                builder.addAddress(a.address(), a.prefix())
+            }
+            if (options.autoRoute) {
+                try {
+                    val dns = options.dnsServerAddress
+                    while (dns.hasNext()) builder.addDnsServer(dns.next())
+                } catch (_: Exception) {
+                }
+                // Full-tunnel routes; our own package is excluded above.
+                builder.addRoute("0.0.0.0", 0)
+                try {
+                    builder.addRoute("::", 0)
+                } catch (_: Exception) {
+                }
+            }
+            com.ironpanel.app.vpn.box.BoxCrumbs.mark(ctx, "41-tun-establish")
+            val pfd = builder.establish()
+                ?: throw IllegalStateException("VpnService not prepared or revoked")
+            BoxTun.fd = pfd
+            com.ironpanel.app.vpn.box.BoxCrumbs.mark(ctx, "42-tun-fd:" + pfd.fd)
+            return pfd.fd
+        } catch (e: Exception) {
+            com.ironpanel.app.vpn.box.BoxCrumbs.mark(
+                ctx, "41-tun-fail:" + (e.message ?: e.javaClass.simpleName)
+            )
+            throw IllegalStateException("tun failed: ${e.message}")
         }
-        val pfd = builder.establish()
-            ?: error("ironapp: VpnService not prepared or revoked")
-        BoxTun.fd = pfd
-        return pfd.fd
     }
 
     private fun shutdown() {        runningLabel = null
