@@ -12,32 +12,16 @@ if [[ ! -d "$WORK/sing-box-src" ]]; then
     https://github.com/SagerNet/sing-box.git "$WORK/sing-box-src"
 fi
 export PATH="$PATH:$(go env GOPATH)/bin"
-# sing-box v1.14.2 linknames Go 1.25 runtime internals: pin the toolchain.
-export GOTOOLCHAIN=local
-export GOFLAGS=-mod=mod
-XMOBILE_VER=""
-mkdir -p "$WORK/gmprobe" && cd "$WORK/gmprobe"
-test -f go.mod || go mod init gmprobe
-for v in $(go list -m -versions golang.org/x/mobile | tr ' ' '\n' | grep -E '^v0\.0\.0-' | sort -r); do
-  if go install "golang.org/x/mobile/cmd/gomobile@$v" 2>/dev/null; then
-    XMOBILE_VER="$v"
-    echo "[core] gomobile $v selected"
-    break
-  fi
-done
-cd "$WORK"
-test -n "$XMOBILE_VER" || { echo "[core] no go1.25-compatible gomobile found"; exit 1; }
+cd "$WORK/sing-box-src"
+go install "$GOMOBILE_PKG"
 gomobile init
 export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
 export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/28.0.13004108}"
-# Bind from INSIDE the sing-box module (same as CI).
-cd "$WORK/sing-box-src"
-go get "golang.org/x/mobile/cmd/gomobile@$XMOBILE_VER"
-go get -tool "golang.org/x/mobile/cmd/gobind@$XMOBILE_VER"
 go mod tidy
 gomobile bind -v -o "$WORK/libbox.aar" \
   -target=android -androidapi "$ANDROID_API" \
-  -javapkg "$JAVAPKG" \
+  -javapkg "$JAVAPKG" -libname="$LIBNAME" \
+  -trimpath -buildvcs=false \
   -tags "$SINGBOX_TAGS" \
   ./experimental/libbox
 echo "[core] AAR ready: $WORK/libbox.aar (copy to app/libs/)"

@@ -8,16 +8,19 @@ OpenConnect-client (ocserv/AnyConnect).
 
 ## Pinned versions (`core/versions.env`)
 
-- sing-box **v1.14.2**, Go **1.25.5**, `-androidapi 21`, `-javapkg com.ironpanel.libbox`
-- Feature tags = sing-box official `DEFAULT_BUILD_TAGS_OTHERS`
-  (QUIC, Reality/uTLS, WireGuard, OpenVPN, OpenConnect, …)
+- sing-box **v1.14.2**, Go **1.26.8**, `-androidapi 21`, `-javapkg com.ironpanel`
+- Mobile tag set copied from sing-box's own `cmd/internal/build_libbox`
+  (legacy variant, minus naive outbound)
+- gomobile = **SagerNet's fork** (`github.com/sagernet/gomobile`, pinned by
+  sing-box's own `go.mod`) — upstream gomobile cannot link this tree
+  (`invalid reference to os.checkPidfdOnce`).
 
 ## How it is built
 
-CI (`Android CI → core`) clones the pinned tag, installs gomobile and runs:
+CI (`Android CI → core`) clones the pinned tag and runs:
 
 ```bash
-bash scripts/build-core.sh   # needs Go 1.25+, JDK 17, Android SDK+NDK
+bash scripts/build-core.sh   # needs Go 1.26+, JDK 17, Android SDK+NDK 28
 ```
 
 The resulting `libbox.aar` is uploaded as a CI artifact and consumed by
