@@ -21,6 +21,10 @@ object TrafficMonitor {
     private val _speeds = MutableStateFlow(Speeds())
     val speeds: StateFlow<Speeds> = _speeds
 
+    /** Rolling history of download Bps (last 40s) for the speed graph. */
+    private val _history = MutableStateFlow<List<Long>>(emptyList())
+    val history: StateFlow<List<Long>> = _history
+
     fun start(context: Context) {
         stop()
         job = scope.launch {
@@ -38,6 +42,7 @@ object TrafficMonitor {
                     downBps = ((rx - lastRx).coerceAtLeast(0) / dt).toLong(),
                     upBps = ((tx - lastTx).coerceAtLeast(0) / dt).toLong(),
                 )
+                _history.value = (_history.value + _speeds.value.downBps).takeLast(40)
                 lastRx = rx
                 lastTx = tx
                 lastT = now
@@ -49,6 +54,7 @@ object TrafficMonitor {
         job?.cancel()
         job = null
         _speeds.value = Speeds()
+        _history.value = emptyList()
     }
 
     fun format(bps: Long): String {

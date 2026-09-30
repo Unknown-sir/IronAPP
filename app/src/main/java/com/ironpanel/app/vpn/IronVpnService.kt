@@ -10,10 +10,10 @@ import android.os.Build
 import com.ironpanel.app.BuildConfig
 import com.ironpanel.app.MainActivity
 import com.ironpanel.app.vpn.box.BoxHost
-import com.ironpanel.app.vpn.box.BoxSetup
 import com.ironpanel.app.vpn.box.BoxTun
 import com.ironpanel.app.vpn.box.IronPlatformInterface
 import com.ironpanel.libbox.TunOptions
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,7 +39,15 @@ class IronVpnService : VpnService() {
             private set
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO +
+            CoroutineExceptionHandler { _, e ->
+                // Nothing on this path may ever kill the process silently:
+                // surface it as a readable connect error instead.
+                VpnManager.onCoreFailed(e.message ?: "core error")
+                stopSelf()
+            }
+    )
     private var box: BoxHost? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -55,8 +63,10 @@ class IronVpnService : VpnService() {
                 startForegroundCompat(label)
                 scope.launch {
                     try {
-                        BoxSetup.ensure(this@IronVpnService, BuildConfig.VERSION_NAME)
-                        val host = BoxHost(IronPlatformInterface(this@IronVpnService, applicationContext))
+                        val host = BoxHost(
+                            applicationContext,
+                            IronPlatformInterface(this@IronVpnService, applicationContext)
+                        )
                         host.start(config)
                         box = host
                         VpnManager.onCoreStarted()

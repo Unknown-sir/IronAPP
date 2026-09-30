@@ -1,15 +1,24 @@
 package com.ironpanel.app.ui
 
 import android.app.Activity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,9 +70,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -110,39 +123,57 @@ fun AppShell(vm: AppViewModel, onScanQr: () -> Unit) {
             Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(heroBrush(MaterialTheme.colorScheme.background == SpaceBlack))
+                .background(heroBrush(MaterialTheme.colorScheme.background == CoalBlack))
         ) {
-            AuroraBlobs()
-            when (tab) {
-                0 -> HomeTab(vm, onScanQr, onShowConfigs = { tab = 1 })
-                1 -> ConfigsTab(vm)
-                else -> SettingsTab(vm)
+            EmberBlobs()
+            AnimatedContent(
+                targetState = tab,
+                transitionSpec = {
+                    (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 6 })
+                        .togetherWith(fadeOut(tween(160)))
+                },
+                label = "tabs"
+            ) { t ->
+                when (t) {
+                    0 -> HomeTab(vm, onScanQr, onShowConfigs = { tab = 1 })
+                    1 -> ConfigsTab(vm)
+                    else -> SettingsTab(vm)
+                }
             }
         }
     }
 }
 
-/** Soft aurora blobs behind everything (2026 VPN-app look). */
+/** Slow-drifting ember glows behind everything. */
 @Composable
-fun AuroraBlobs() {
+fun EmberBlobs() {
+    val drift = rememberInfiniteTransition(label = "drift")
+    val dx by drift.animateFloat(
+        initialValue = -30f, targetValue = 30f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(7000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "dx"
+    )
     Canvas(Modifier.fillMaxSize()) {
         drawCircle(
             Brush.radialGradient(
-                listOf(AuroraViolet.copy(alpha = 0.25f), Color.Transparent),
-                center = Offset(size.width * 0.85f, size.height * 0.08f),
+                listOf(BloodRed.copy(alpha = 0.22f), Color.Transparent),
+                center = Offset(size.width * 0.85f + dx, size.height * 0.06f),
                 radius = size.minDimension * 0.55f
             ),
             radius = size.minDimension * 0.55f,
-            center = Offset(size.width * 0.85f, size.height * 0.08f)
+            center = Offset(size.width * 0.85f + dx, size.height * 0.06f)
         )
         drawCircle(
             Brush.radialGradient(
-                listOf(AuroraCyan.copy(alpha = 0.18f), Color.Transparent),
-                center = Offset(size.width * 0.1f, size.height * 0.32f),
-                radius = size.minDimension * 0.6f
+                listOf(DeepRed.copy(alpha = 0.28f), Color.Transparent),
+                center = Offset(size.width * 0.08f - dx, size.height * 0.38f),
+                radius = size.minDimension * 0.62f
             ),
-            radius = size.minDimension * 0.6f,
-            center = Offset(size.width * 0.1f, size.height * 0.32f)
+            radius = size.minDimension * 0.62f,
+            center = Offset(size.width * 0.08f - dx, size.height * 0.38f)
         )
     }
 }
@@ -168,7 +199,7 @@ fun HomeTab(vm: AppViewModel, onScanQr: () -> Unit, onShowConfigs: () -> Unit) {
             }
             is LoadState.Loading -> {
                 Box(Modifier.fillMaxWidth().padding(top = 80.dp), Alignment.Center) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
             is LoadState.Ready -> ConnectedHome(vm, s.snapshot, s.baseUrl, onShowConfigs)
@@ -180,42 +211,59 @@ fun HomeTab(vm: AppViewModel, onScanQr: () -> Unit, onShowConfigs: () -> Unit) {
 fun OnboardingCard(vm: AppViewModel, onScanQr: () -> Unit) {
     var text by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(28.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(tween(400)) + slideInVertically(tween(400)) { 60 },
+        label = "onboard"
     ) {
-        Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text("⚡", fontSize = 40.sp)
-            Text(
-                stringResource(R.string.add_sub),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
+        Card(
+            Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
             )
-            Text(
-                stringResource(R.string.onboarding_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it; error = "" },
-                label = { Text(stringResource(R.string.sub_hint)) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                shape = RoundedCornerShape(16.dp)
-            )
-            if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = { vm.import(text) { error = it } },
-                    modifier = Modifier.weight(1f),
+        ) {
+            Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("🛡️", fontSize = 40.sp)
+                Text(
+                    "IronAPP",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Black,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    stringResource(R.string.add_sub),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    stringResource(R.string.onboarding_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it; error = "" },
+                    label = { Text(stringResource(R.string.sub_hint)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                     shape = RoundedCornerShape(16.dp)
-                ) { Text(stringResource(R.string.paste)) }
-                OutlinedButton(onClick = onScanQr, shape = RoundedCornerShape(16.dp)) {
-                    Icon(Icons.Filled.QrCodeScanner, null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(stringResource(R.string.scan_qr))
+                )
+                if (error.isNotEmpty()) Text(error, color = MaterialTheme.colorScheme.error)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(
+                        onClick = { vm.import(text) { error = it } },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) { Text(stringResource(R.string.paste)) }
+                    OutlinedButton(onClick = onScanQr, shape = RoundedCornerShape(16.dp)) {
+                        Icon(Icons.Filled.QrCodeScanner, null)
+                        Spacer(Modifier.width(6.dp))
+                        Text(stringResource(R.string.scan_qr))
+                    }
                 }
             }
         }
@@ -227,141 +275,158 @@ fun ConnectedHome(vm: AppViewModel, snap: AppSnapshot, baseUrl: String, onShowCo
     val protocol by vm.protocol.collectAsState()
     val vpnState by VpnManager.state.collectAsState()
     val speeds by TrafficMonitor.speeds.collectAsState()
+    val history by TrafficMonitor.history.collectAsState()
     val context = LocalContext.current
     val connected = vpnState is VpnManager.State.Connected
     val preparing = vpnState is VpnManager.State.Preparing
 
-    // header
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(46.dp)
-                .clip(CircleShape)
-                .background(auroraBrush()),
-            Alignment.Center
-        ) {
-            Text(
-                snap.user.username.firstOrNull()?.uppercase() ?: "U",
-                color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp
-            )
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(
-                snap.user.username,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                baseUrl.removePrefix("http://").removePrefix("https://"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-        }
-        StatusPill(connected = connected)
-        IconButton(onClick = { vm.refresh() }) { Icon(Icons.Filled.Refresh, null) }
-    }
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(tween(350)) + slideInVertically(tween(350)) { 40 },
+        label = "home"
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(46.dp)
+                        .clip(CircleShape)
+                        .background(emberBrush()),
+                    Alignment.Center
+                ) {
+                    Text(
+                        snap.user.username.firstOrNull()?.uppercase() ?: "U",
+                        color = Color.White, fontWeight = FontWeight.Black, fontSize = 20.sp
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        snap.user.username,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        baseUrl.removePrefix("http://").removePrefix("https://"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis
+                    )
+                }
+                StatusPill(connected = connected)
+                IconButton(onClick = { vm.refresh() }) { Icon(Icons.Filled.Refresh, null) }
+            }
 
-    // hero power button
-    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp), Alignment.Center) {
-        PowerButton(
-            connected = connected,
-            busy = preparing,
-            onClick = {
-                val activity = context as? Activity ?: return@PowerButton
+            // hero power button
+            Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), Alignment.Center) {
+                PowerButton(
+                    connected = connected,
+                    busy = preparing,
+                    onClick = {
+                        val activity = context as? Activity ?: return@PowerButton
+                        when {
+                            connected -> VpnManager.disconnect(context)
+                            protocol == "telegram_proxy" -> MtprotoConnector.open(context, snap)
+                            VpnManager.isEngineProtocol(protocol) ->
+                                VpnManager.connect(activity, snap, protocol)
+                            else -> onShowConfigs()
+                        }
+                    }
+                )
+            }
+            Text(
                 when {
-                    connected -> VpnManager.disconnect(context)
-                    protocol == "telegram_proxy" -> MtprotoConnector.open(context, snap)
-                    VpnManager.isEngineProtocol(protocol) ->
-                        VpnManager.connect(activity, snap, protocol)
-                    else -> onShowConfigs()
+                    connected -> (vpnState as VpnManager.State.Connected).label
+                    preparing -> stringResource(R.string.connecting)
+                    !snap.user.accessOk -> snap.user.accessReason.ifBlank { stringResource(R.string.expired_blocked) }
+                    else -> stringResource(R.string.tap_to_connect, protocol)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (!snap.user.accessOk && !connected) MaterialTheme.colorScheme.error
+                else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // live speeds + waveform
+            if (connected) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                    SpeedChip("↓", TrafficMonitor.format(speeds.downBps))
+                    SpeedChip("↑", TrafficMonitor.format(speeds.upBps))
+                }
+                SpeedGraph(history)
+            }
+
+            // error / blocked banner
+            when (val st = vpnState) {
+                is VpnManager.State.Blocked ->
+                    StatusBanner(st.reasonFa.ifBlank { st.reasonEn }, isError = true)
+                is VpnManager.State.Error -> StatusBanner(st.message, isError = true)
+                else -> Unit
+            }
+            if (!snap.user.accessOk && !connected) {
+                OutlinedButton(onClick = { vm.refresh() }, Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.refresh))
                 }
             }
-        )
-    }
-    Text(
-        when {
-            connected -> (vpnState as VpnManager.State.Connected).label
-            preparing -> stringResource(R.string.connecting)
-            !snap.user.accessOk -> snap.user.accessReason.ifBlank { stringResource(R.string.expired_blocked) }
-            else -> stringResource(R.string.tap_to_connect, protocol)
-        },
-        modifier = Modifier.fillMaxWidth(),
-        textAlign = TextAlign.Center,
-        style = MaterialTheme.typography.bodyMedium,
-        color = if (!snap.user.accessOk && !connected) MaterialTheme.colorScheme.error
-        else MaterialTheme.colorScheme.onSurfaceVariant
-    )
 
-    // live speeds
-    if (connected) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            SpeedChip("↓", TrafficMonitor.format(speeds.downBps))
-            SpeedChip("↑", TrafficMonitor.format(speeds.upBps))
-        }
-    }
+            // protocols carousel
+            Text(stringResource(R.string.configs), style = MaterialTheme.typography.titleMedium)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(end = 4.dp)
+            ) {
+                itemsIndexed(snap.user.protocols) { _, p ->
+                    ProtocolCard(
+                        name = p,
+                        selected = protocol == p,
+                        engine = VpnManager.isEngineProtocol(p) || p == "telegram_proxy",
+                        onClick = { vm.selectProtocol(p) }
+                    )
+                }
+            }
 
-    // error / blocked banner
-    when (val st = vpnState) {
-        is VpnManager.State.Blocked ->
-            StatusBanner(st.reasonFa.ifBlank { st.reasonEn }, isError = true)
-        is VpnManager.State.Error -> StatusBanner(st.message, isError = true)
-        else -> Unit
-    }
-    if (!snap.user.accessOk && !connected) {
-        OutlinedButton(onClick = { vm.refresh() }, Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.refresh))
-        }
-    }
+            // usage + expiry glass card
+            UsageEmberCard(snap)
 
-    // protocols carousel
-    Text(stringResource(R.string.configs), style = MaterialTheme.typography.titleMedium)
-    LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(end = 4.dp)
-    ) {
-        itemsIndexed(snap.user.protocols) { _, p ->
-            ProtocolCard(
-                name = p,
-                selected = protocol == p,
-                engine = VpnManager.isEngineProtocol(p) || p == "telegram_proxy",
-                onClick = { vm.selectProtocol(p) }
-            )
-        }
-    }
+            if (!VpnManager.isEngineProtocol(protocol) && protocol != "telegram_proxy" &&
+                snap.user.protocols.contains(protocol)
+            ) {
+                CredentialHintCard(snap, protocol)
+            }
 
-    // usage + expiry glass card
-    UsageGlassCard(snap)
-
-    // view-only credential hint for legacy protocols
-    if (!VpnManager.isEngineProtocol(protocol) && protocol != "telegram_proxy" &&
-        snap.user.protocols.contains(protocol)
-    ) {
-        CredentialHintCard(snap, protocol)
-    }
-
-    // footer
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedButton(
+            // footer
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(
                     onClick = {
-                VpnManager.disconnect(context)
-                vm.forget()
-            },
-            modifier = Modifier.weight(1f)
-        ) { Text(stringResource(R.string.switch_account)) }
-        OutlinedButton(onClick = { vm.refresh() }, modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.refresh))
+                        VpnManager.disconnect(context)
+                        vm.forget()
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text(stringResource(R.string.switch_account)) }
+                OutlinedButton(onClick = { vm.refresh() }, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.refresh))
+                }
+            }
         }
     }
 }
 
 @Composable
 fun StatusPill(connected: Boolean) {
+    val pulse = rememberInfiniteTransition(label = "dot")
+    val alpha by pulse.animateFloat(
+        initialValue = 1f, targetValue = if (connected) 0.35f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900), repeatMode = RepeatMode.Reverse
+        ),
+        label = "dot"
+    )
     val bg = if (connected) GoodGreen.copy(alpha = 0.16f)
-    else MaterialTheme.colorScheme.surfaceVariant
-    val fg = if (connected) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant
+    else BloodRed.copy(alpha = 0.12f)
+    val fg = if (connected) GoodGreen else BloodRed
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
@@ -369,7 +434,7 @@ fun StatusPill(connected: Boolean) {
             .padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Canvas(Modifier.size(8.dp)) { drawCircle(fg) }
+        Canvas(Modifier.size(8.dp)) { drawCircle(fg.copy(alpha = alpha)) }
         Spacer(Modifier.width(6.dp))
         Text(
             stringResource(if (connected) R.string.protected_ else R.string.not_protected),
@@ -382,63 +447,89 @@ fun StatusPill(connected: Boolean) {
 fun PowerButton(connected: Boolean, busy: Boolean, onClick: () -> Unit) {
     val transition = rememberInfiniteTransition(label = "pulse")
     val pulse by transition.animateFloat(
-        initialValue = 0.96f, targetValue = 1.06f,
+        initialValue = 0.96f, targetValue = 1.07f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
+            animation = tween(1300, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulse"
     )
+    val spin by transition.animateFloat(
+        initialValue = 0f, targetValue = 360f,
+        animationSpec = infiniteRepeatable(animation = tween(1600)),
+        label = "spin"
+    )
+    val pressScale by animateFloatAsState(
+        targetValue = if (connected) 1.04f else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+        label = "press"
+    )
     Box(
-        Modifier.size(176.dp),
+        Modifier
+            .size(184.dp)
+            .scale(pressScale),
         Alignment.Center
     ) {
-        val trackIdle = MaterialTheme.colorScheme.surfaceVariant
-        val trackGlow = MaterialTheme.colorScheme.primary
         if (connected) {
-            Canvas(Modifier.size((176 * pulse).dp)) {
+            Canvas(Modifier.size((184 * pulse).dp)) {
                 drawCircle(
                     Brush.radialGradient(
-                        listOf(GoodGreen.copy(alpha = 0.35f), Color.Transparent)
+                        listOf(BloodRed.copy(alpha = 0.4f), Color.Transparent)
                     )
                 )
             }
         }
-        Canvas(Modifier.size(150.dp)) {
-            drawArc(
-                brush = if (connected) Brush.sweepGradient(listOf(GoodGreen, AuroraCyan, GoodGreen))
-                else Brush.sweepGradient(listOf(trackIdle, trackGlow, trackIdle)),
-                startAngle = -90f, sweepAngle = 360f, useCenter = false,
-                style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
-            )
+        Canvas(Modifier.size(152.dp)) {
+            if (busy) {
+                drawArc(
+                    brush = Brush.sweepGradient(listOf(BloodRed, Color.Transparent, BloodRed)),
+                    startAngle = spin, sweepAngle = 300f, useCenter = false,
+                    style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
+                )
+            } else {
+                drawArc(
+                    brush = if (connected) Brush.sweepGradient(
+                        listOf(BloodRed, EmberOrange, BloodRed)
+                    ) else Brush.sweepGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surfaceVariant,
+                            BloodRed.copy(alpha = 0.65f),
+                            MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ),
+                    startAngle = -90f, sweepAngle = 360f, useCenter = false,
+                    style = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
         }
         Box(
             Modifier
                 .size(116.dp)
                 .clip(CircleShape)
                 .background(
-                    if (connected) Brush.linearGradient(listOf(GoodGreen, AuroraCyan))
+                    if (connected) Brush.linearGradient(listOf(BloodRed, DeepRed))
                     else Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.surfaceVariant,
-                            MaterialTheme.colorScheme.surface
-                        )
+                        listOf(Color(0xFF141419), Color(0xFF08080B))
                     )
                 )
-                .clickable(onClick = onClick),
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick
+                ),
             Alignment.Center
         ) {
             if (busy) {
                 CircularProgressIndicator(
                     Modifier.size(40.dp),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = BloodRed,
                     strokeWidth = 4.dp
                 )
             } else {
                 Icon(
                     Icons.Filled.PowerSettingsNew, null,
-                    Modifier.size(52.dp),
-                    tint = if (connected) Color.White else MaterialTheme.colorScheme.primary
+                    Modifier.size(54.dp),
+                    tint = if (connected) Color.White else BloodRed
                 )
             }
         }
@@ -450,13 +541,52 @@ fun SpeedChip(dir: String, value: String) {
     Row(
         Modifier
             .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f))
+            .background(BloodRed.copy(alpha = 0.12f))
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(dir, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(dir, fontWeight = FontWeight.Black, color = BloodRed)
         Spacer(Modifier.width(6.dp))
         Text(value, style = MaterialTheme.typography.labelLarge)
+    }
+}
+
+/** Live download waveform drawn from the last 40 samples. */
+@Composable
+fun SpeedGraph(history: List<Long>) {
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+        )
+    ) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 4.dp, vertical = 6.dp)
+        ) {
+            if (history.size < 2) return@Canvas
+            val max = (history.maxOrNull() ?: 1L).coerceAtLeast(1L).toFloat()
+            val stepX = size.width / (history.size - 1)
+            val path = Path()
+            history.forEachIndexed { i, v ->
+                val x = i * stepX
+                val y = size.height - (v.toFloat() / max) * size.height * 0.92f - size.height * 0.04f
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            val fill = Path().apply {
+                addPath(path)
+                lineTo(size.width, size.height)
+                lineTo(0f, size.height)
+                close()
+            }
+            drawPath(
+                fill,
+                Brush.verticalGradient(listOf(BloodRed.copy(alpha = 0.35f), Color.Transparent))
+            )
+            drawPath(path, BloodRed, style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round))
+        }
     }
 }
 
@@ -475,14 +605,22 @@ fun StatusBanner(message: String, isError: Boolean) {
 
 @Composable
 fun ProtocolCard(name: String, selected: Boolean, engine: Boolean, onClick: () -> Unit) {
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.03f else 1f,
+        animationSpec = spring(dampingRatio = 0.6f, stiffness = 400f),
+        label = "card"
+    )
     Card(
         onClick = onClick,
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer
+            containerColor = if (selected) BloodRed.copy(alpha = 0.16f)
             else MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
         ),
-        border = if (selected) null else CardDefaults.outlinedCardBorder()
+        border = if (selected) androidx.compose.foundation.BorderStroke(
+            1.5.dp, BloodRed
+        ) else CardDefaults.outlinedCardBorder(),
+        modifier = Modifier.scale(scale)
     ) {
         Column(
             Modifier.width(108.dp).padding(14.dp),
@@ -492,56 +630,60 @@ fun ProtocolCard(name: String, selected: Boolean, engine: Boolean, onClick: () -
                 Modifier
                     .size(38.dp)
                     .clip(CircleShape)
-                    .background(auroraBrush()),
+                    .background(emberBrush()),
                 Alignment.Center
             ) {
                 Text(
                     name.firstOrNull()?.uppercase() ?: "?",
-                    color = Color.White, fontWeight = FontWeight.Bold
+                    color = Color.White, fontWeight = FontWeight.Black
                 )
             }
             Text(name, fontWeight = FontWeight.SemiBold, maxLines = 1)
             Text(
                 stringResource(if (engine) R.string.one_tap else R.string.view_only),
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = if (selected) BloodRed else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
 }
 
 @Composable
-fun UsageGlassCard(snap: AppSnapshot) {
+fun UsageEmberCard(snap: AppSnapshot) {
     val usage = snap.user.usage
-    val fraction = if (usage.totalBytes > 0) {
+    val target = if (usage.totalBytes > 0) {
         val rem = usage.remainingBytes ?: usage.totalBytes
         (1f - rem.toFloat() / usage.totalBytes.toFloat()).coerceIn(0f, 1f)
     } else 0f
+    val fraction by animateFloatAsState(
+        targetValue = target,
+        animationSpec = tween(800, easing = FastOutSlowInEasing),
+        label = "usage"
+    )
     Card(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
         )
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val trackColor = MaterialTheme.colorScheme.surfaceVariant
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(stringResource(R.string.remaining_volume), fontWeight = FontWeight.SemiBold)
                 Text(
                     if (usage.unlimitedTraffic) stringResource(R.string.unlimited)
                     else usage.remainingHuman.ifBlank { usage.totalHuman },
-                    fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary
+                    fontWeight = FontWeight.Black, color = BloodRed
                 )
             }
-            Canvas(Modifier.fillMaxWidth().height(10.dp)) {
+            Canvas(Modifier.fillMaxWidth().height(12.dp)) {
                 drawRoundRect(
-                    trackColor,
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(5.dp.toPx())
+                    Color(0xFF2A2A32),
+                    cornerRadius = CornerRadius(6.dp.toPx())
                 )
                 drawRoundRect(
-                    Brush.horizontalGradient(listOf(AuroraCyan, AuroraViolet)),
-                    size = androidx.compose.ui.geometry.Size(size.width * fraction, size.height),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(5.dp.toPx())
+                    Brush.horizontalGradient(listOf(DeepRed, BloodRed, EmberOrange)),
+                    size = Size(size.width * fraction, size.height),
+                    cornerRadius = CornerRadius(6.dp.toPx())
                 )
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -651,7 +793,7 @@ fun ConfigsTab(vm: AppViewModel) {
                         Text(
                             custom.kind,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
+                            color = BloodRed
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -819,7 +961,7 @@ fun SettingsTab(vm: AppViewModel) {
         }
         Card(shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("IronAPP 1.2.0", fontWeight = FontWeight.Bold)
+                Text("IronAPP 1.3.0", fontWeight = FontWeight.Black, color = BloodRed)
                 Text(
                     "panel ≥ 2.0.11 · GPL-3.0-or-later",
                     style = MaterialTheme.typography.bodySmall,

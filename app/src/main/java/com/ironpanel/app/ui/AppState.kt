@@ -80,8 +80,32 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         refresh(current.baseUrl, current.token)
     }
 
-    private fun refresh(baseUrl: String, token: String) {
-        _load.value = LoadState.Loading
+    /**
+     * Called every time the app comes to foreground: re-read used volume,
+     * remaining volume and remaining time from the panel so the home screen
+     * never shows stale quota. Silent: the visible screen is only replaced
+     * when the fetch succeeds.
+     */
+    fun refreshOnOpen() {
+        when (val current = _load.value) {
+            is LoadState.Ready -> refresh(current.baseUrl, current.token, silent = true)
+            is LoadState.Failed -> {
+                // The saved subscription may still be valid (e.g. recharged
+                // while away) — retry silently, keep the error until success.
+                viewModelScope.launch {
+                    val token = store.token.first()
+                    val base = store.baseUrl.first()
+                    if (!token.isNullOrBlank() && !base.isNullOrBlank()) {
+                        refresh(base, token, silent = true)
+                    }
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun refresh(baseUrl: String, token: String, silent: Boolean = false) {
+        if (!silent) _load.value = LoadState.Loading
         viewModelScope.launch {
             try {
                 val snap = repo.loadSnapshot(baseUrl, token)
@@ -93,7 +117,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 _load.value = LoadState.Ready(snap, baseUrl, token)
             } catch (e: Exception) {
-                _load.value = LoadState.Failed(e.message ?: "Load failed")
+                if (!silent) _load.value = LoadState.Failed(e.message ?: "Load failed")
             }
         }
     }
