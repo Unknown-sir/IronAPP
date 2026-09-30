@@ -60,14 +60,20 @@ jobs:
           export PATH="$PATH:$(go env GOPATH)/bin"
           # Resolve the newest x/mobile that still builds with Go 1.25
           # (newer ones require go >= 1.26 and break sing-box linknames).
+          # NOTE: version queries need a module context, hence the probe dir.
+          mkdir -p /tmp/gmprobe && cd /tmp/gmprobe
+          test -f go.mod || go mod init gmprobe
           XMOBILE_VER=""
           for v in $(go list -m -versions golang.org/x/mobile | tr ' ' '\n' | grep -E '^v0\.0\.0-' | sort -r); do
-            if go install "golang.org/x/mobile/cmd/gomobile@$v" 2>/dev/null; then
+            if go install "golang.org/x/mobile/cmd/gomobile@$v" 2>/tmp/gmprobe_err.txt; then
               XMOBILE_VER="$v"
               echo "gomobile $v selected"
               break
+            else
+              echo "reject $v: $(head -c 200 /tmp/gmprobe_err.txt)"
             fi
           done
+          cd "$GITHUB_WORKSPACE"
           test -n "$XMOBILE_VER" || (echo "no go1.25-compatible gomobile found" && exit 1)
           echo "XMOBILE_VER=$XMOBILE_VER" >> "$GITHUB_ENV"
           gomobile init

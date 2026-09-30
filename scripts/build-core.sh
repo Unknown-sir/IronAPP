@@ -16,6 +16,8 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 export GOTOOLCHAIN=local
 export GOFLAGS=-mod=mod
 XMOBILE_VER=""
+mkdir -p "$WORK/gmprobe" && cd "$WORK/gmprobe"
+test -f go.mod || go mod init gmprobe
 for v in $(go list -m -versions golang.org/x/mobile | tr ' ' '\n' | grep -E '^v0\.0\.0-' | sort -r); do
   if go install "golang.org/x/mobile/cmd/gomobile@$v" 2>/dev/null; then
     XMOBILE_VER="$v"
@@ -23,6 +25,7 @@ for v in $(go list -m -versions golang.org/x/mobile | tr ' ' '\n' | grep -E '^v0
     break
   fi
 done
+cd "$WORK"
 test -n "$XMOBILE_VER" || { echo "[core] no go1.25-compatible gomobile found"; exit 1; }
 gomobile init
 export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
