@@ -61,22 +61,17 @@ jobs:
         run: |
           export ANDROID_HOME="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/28.0.13004108}"
-          # Modern gomobile requires x/mobile in the *current* module, so bind
-          # through a tiny wrapper module that re-exports the pinned source.
-          rm -rf core-bind && mkdir core-bind && cd core-bind
-          go mod init ironapp/boxbind
+          # Bind from INSIDE the sing-box module (its own go.mod gains x/mobile),
+          # so package paths and internal/ visibility stay canonical.
+          cd sing-box-src
           go get golang.org/x/mobile/cmd/gomobile@latest
           go get -tool golang.org/x/mobile/cmd/gobind
-          printf '//go:build tools\n\npackage tools\n\nimport _ "github.com/SagerNet/sing-box/experimental/libbox"\n' > tools.go
-          go mod edit \
-            -require=github.com/SagerNet/sing-box@v${{ env.SINGBOX_VERSION }} \
-            -replace=github.com/SagerNet/sing-box=$GITHUB_WORKSPACE/sing-box-src
           go mod tidy
           gomobile bind -v -o "$GITHUB_WORKSPACE/libbox.aar" \
             -target=android -androidapi 21 \
             -javapkg com.ironpanel.libbox \
             -tags "$SINGBOX_TAGS" \
-            github.com/SagerNet/sing-box/experimental/libbox
+            ./experimental/libbox
 
       - name: Verify AAR ABIs
         run: |
