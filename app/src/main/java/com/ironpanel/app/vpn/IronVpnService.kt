@@ -107,24 +107,37 @@ class IronVpnService : VpnService() {
                 val a = v4.next()
                 builder.addAddress(a.address(), a.prefix())
             }
+        val v6addrs = mutableListOf<Pair<String, Int>>()
+        try {
             val v6 = options.inet6Address
             while (v6.hasNext()) {
                 val a = v6.next()
-                builder.addAddress(a.address(), a.prefix())
+                v6addrs.add(a.address() to a.prefix())
             }
-            if (options.autoRoute) {
-                try {
-                    val dns = options.dnsServerAddress
-                    while (dns.hasNext()) builder.addDnsServer(dns.next())
-                } catch (_: Exception) {
-                }
-                // Full-tunnel routes; our own package is excluded above.
-                builder.addRoute("0.0.0.0", 0)
+        } catch (_: Exception) {
+        }
+        for ((addr, prefix) in v6addrs) {
+            try {
+                builder.addAddress(addr, prefix)
+            } catch (_: Exception) {
+            }
+        }
+        if (options.autoRoute) {
+            try {
+                val dns = options.dnsServerAddress
+                while (dns.hasNext()) builder.addDnsServer(dns.next())
+            } catch (_: Exception) {
+            }
+            // Full-tunnel routes; our own package is excluded above.
+            // ::/0 only when the core actually uses IPv6 (SFA parity).
+            builder.addRoute("0.0.0.0", 0)
+            if (v6addrs.isNotEmpty()) {
                 try {
                     builder.addRoute("::", 0)
                 } catch (_: Exception) {
                 }
             }
+        }
             com.ironpanel.app.vpn.box.BoxCrumbs.mark(ctx, "41-tun-establish")
             val pfd = builder.establish()
                 ?: throw IllegalStateException("VpnService not prepared or revoked")
