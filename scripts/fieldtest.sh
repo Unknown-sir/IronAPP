@@ -24,11 +24,15 @@ echo "=== verify package + service ==="
 adb shell pm list packages 2>/dev/null | grep -i ironpanel || echo "(package not listed!)"
 adb shell dumpsys package "$PKG" 2>/dev/null | grep -i "IronVpnService" | head -3 || echo "(service not found!)"
 
+echo "=== sanity: launch MainActivity (must succeed) ==="
+adb shell am start --user 0 -n "$PKG/.MainActivity" || true
+sleep 5
+
 echo "=== start core service (config via on-device variable, always quoted) ==="
 if [ "$API" -ge 26 ]; then
-  adb shell 'CFG=$(cat /data/local/tmp/ironapp-fieldtest.json); am start-foreground-service -n '"$PKG"'/.vpn.IronVpnService -a com.ironpanel.app.vpn.START --es config_json "$CFG" --es label "fieldtest vless"' || true
+  adb shell 'CFG=$(cat /data/local/tmp/ironapp-fieldtest.json); am start-foreground-service --user 0 -n '"$PKG"'/.vpn.IronVpnService -a com.ironpanel.app.vpn.START --es config_json "$CFG" --es label "fieldtest vless"' || true
 else
-  adb shell 'CFG=$(cat /data/local/tmp/ironapp-fieldtest.json); am startservice -n '"$PKG"'/.vpn.IronVpnService -a com.ironpanel.app.vpn.START --es config_json "$CFG" --es label "fieldtest vless"' || true
+  adb shell 'CFG=$(cat /data/local/tmp/ironapp-fieldtest.json); am startservice --user 0 -n '"$PKG"'/.vpn.IronVpnService -a com.ironpanel.app.vpn.START --es config_json "$CFG" --es label "fieldtest vless"' || true
 fi
 
 echo "=== wait 25s ==="
