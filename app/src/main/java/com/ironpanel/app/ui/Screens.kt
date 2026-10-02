@@ -958,7 +958,7 @@ fun SettingsTab(vm: AppViewModel) {
         }
         Card(shape = RoundedCornerShape(20.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("IronAPP 1.3.1", fontWeight = FontWeight.Black, color = BloodRed)
+                Text("IronAPP 1.3.2", fontWeight = FontWeight.Black, color = BloodRed)
                 Text(
                     "panel ≥ 2.0.11 · GPL-3.0-or-later",
                     style = MaterialTheme.typography.bodySmall,

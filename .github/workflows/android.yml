@@ -142,12 +142,56 @@ jobs:
           IRONAPP_KEY_ALIAS: ${{ secrets.IRONAPP_KEY_ALIAS }}
           IRONAPP_KEY_PASSWORD: ${{ secrets.IRONAPP_KEY_PASSWORD }}
 
+      - name: Build debug APKs (field-testable, debuggable)
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
       - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
           name: ironapp-apks
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironapp-debug-apks
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+  # ---- On-emulator field test: real core start on real Android ----
+  fieldtest:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [24, 29, 33]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download debug APKs
+        uses: actions/download-artifact@v4
+        with:
+          name: ironapp-debug-apks
+          path: debug-apks
+
+      - name: Field test on API ${{ matrix.api }} emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          script: bash scripts/fieldtest.sh "debug-apks/Ironapp-x86_64-debug.apk" "${{ matrix.api }}"
+
+      - name: Upload logcat
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fieldtest-logcat-api${{ matrix.api }}
+          path: logcat-api${{ matrix.api }}.txt
+          if-no-files-found: warn
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

@@ -55,4 +55,14 @@ object BoxCrumbs {
         } catch (_: Exception) {
         }
     }
+
+    /** Persist the exact core input (capped) for post-crash correlation. */
+    @Synchronized
+    fun saveConfig(context: Context, configJson: String) {
+        try {
+            val dir = File(context.filesDir, DIR).apply { mkdirs() }
+            File(dir, "last-config.json").writeText(configJson.take(32768))
+        } catch (_: Exception) {
+        }
+    }
 }

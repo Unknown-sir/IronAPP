@@ -54,6 +54,7 @@ class BoxHost(
     fun start(configJson: String) {
         stop()
         BoxCrumbs.mark(appContext, "10-start-enter")
+        BoxCrumbs.saveConfig(appContext, configJson)
         val checked: String = try {
             // Fail fast on malformed configs before touching the TUN.
             Libbox.checkConfig(configJson)
