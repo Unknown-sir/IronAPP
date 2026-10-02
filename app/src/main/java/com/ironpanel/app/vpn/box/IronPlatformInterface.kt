@@ -155,13 +155,13 @@ class IronPlatformInterface(
                     val box = BoxInterface()
                     box.name = name
                     box.dnsServer = StringArray(
-                        props.dnsServers.mapNotNull { it.hostAddress }.iterator()
+                        props.dnsServers.mapNotNull { cleanIp(it.hostAddress) }.iterator()
                     )
                     box.gateway = StringArray(
                         props.routes.filter { it.destination?.prefixLength == 0 }
                             .mapNotNull { it.gateway }
                             .filterNot { it.isAnyLocalAddress }
-                            .mapNotNull { it.hostAddress }
+                            .mapNotNull { cleanIp(it.hostAddress) }
                             .iterator()
                     )
                     box.type = when {
@@ -179,8 +179,10 @@ class IronPlatformInterface(
                     } catch (_: Exception) {
                     }
                     box.addresses = StringArray(
-                        jface.interfaceAddresses.map { it.address.hostAddress + "/" + it.networkPrefixLength }
-                            .iterator()
+                        jface.interfaceAddresses.mapNotNull {
+                            val ip = cleanIp(it.address?.hostAddress) ?: return@mapNotNull null
+                            "$ip/${it.networkPrefixLength}"
+                        }.iterator()
                     )
                     var flags = 0
                     if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
@@ -289,6 +291,19 @@ class IronPlatformInterface(
 
     override fun registerMyInterface(name: String?) {
         tunName = name ?: ""
+    }
+
+    /**
+     * Sanitize an IP literal before handing it to the core: the core parses
+     * addresses with netip.MustParsePrefix, which PANICS (silent process
+     * death) on nulls, blanks and IPv6 zone ids (fe80::..%wlan0, present on
+     * every Wi-Fi/mobile link-local address).
+     */
+    private fun cleanIp(raw: String?): String? {
+        if (raw.isNullOrBlank()) return null
+        val ip = raw.substringBefore("%").trim()
+        if ('.' !in ip && ':' !in ip) return null
+        return ip
     }
 }
 
