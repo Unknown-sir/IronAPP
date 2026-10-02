@@ -16,18 +16,19 @@ adb wait-for-device
 echo "=== grant VPN consent (best effort) ==="
 adb shell appops set "$PKG" ACTIVATE_VPN allow || true
 
-CONFIG="$(tr -d '\n' < "$(dirname "$0")/fieldtest-config.json")"
-echo "=== start core service ==="
+CONFIG_SRC="$(dirname "$0")/fieldtest-config.json"
+echo "=== push config to device ==="
+adb push "$CONFIG_SRC" /data/local/tmp/ironapp-fieldtest.json
+
+echo "=== verify package + service ==="
+adb shell pm list packages 2>/dev/null | grep -i ironpanel || echo "(package not listed!)"
+adb shell dumpsys package "$PKG" 2>/dev/null | grep -i "IronVpnService" | head -3 || echo "(service not found!)"
+
+echo "=== start core service (config via on-device variable, always quoted) ==="
 if [ "$API" -ge 26 ]; then
-  adb shell am start-foreground-service -n "$PKG/.vpn.IronVpnService" \
-    -a com.ironpanel.app.vpn.START \
-    --es config_json "$CONFIG" \
-    --es label "fieldtest vless" || true
+  adb shell 'CFG=$(cat /data/local/tmp/ironapp-fieldtest.json); am start-foreground-service -n '"$PKG"'/.vpn.IronVpnService -a com.ironpanel.app.vpn.START --es config_json "$CFG" --es label "fieldtest vless"' || true
 else
-  adb shell am startservice -n "$PKG/.vpn.IronVpnService" \
-    -a com.ironpanel.app.vpn.START \
-    --es config_json "$CONFIG" \
-    --es label "fieldtest vless" || true
+  adb shell 'CFG=$(cat /data/local/tmp/ironapp-fieldtest.json); am startservice -n '"$PKG"'/.vpn.IronVpnService -a com.ironpanel.app.vpn.START --es config_json "$CFG" --es label "fieldtest vless"' || true
 fi
 
 echo "=== wait 25s ==="
