@@ -1,0 +1,18 @@
+# Always LF on checkout (CI runs on Linux): scripts, workflows, configs.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.kts text eol=lf
+*.kt text eol=lf
+*.xml text eol=lf
+*.gradle text eol=lf
+*.properties text eol=lf
+*.md text eol=lf
+*.env text eol=lf
+# Gradle wrapper jar + keystores + AARs stay binary.
+*.jar binary
+*.aar binary
+*.jks binary
+*.keystore binary
+*.png binary
